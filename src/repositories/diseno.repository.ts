@@ -53,7 +53,7 @@ export const disenoRepository = {
     const query = `
       UPDATE disenos 
       SET titulo = $1, descripcion = $2, imagen_url = $3, archivo_url = $4,
-          precio_base = $5, formato = $6, especificaciones = $7, actualizado_en = CURRENT_TIMESTAMP
+          precio_base = $5, formato = $6, especificaciones = $7
       WHERE id = $8
       RETURNING *;
     `;
@@ -90,7 +90,6 @@ export const disenoRepository = {
 
     if (fields.length === 0) return null;
 
-    fields.push('actualizado_en = CURRENT_TIMESTAMP');
     values.push(id);
 
     const query = `
