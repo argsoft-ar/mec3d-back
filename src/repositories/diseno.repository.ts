@@ -1,4 +1,4 @@
-import pool from '../config/db.config';
+import pool from "../config/db.config";
 
 export const disenoRepository = {
   async getAllProducts() {
@@ -43,7 +43,9 @@ export const disenoRepository = {
       productData.archivoUrl,
       productData.precioBase,
       productData.formato || null,
-      productData.especificaciones ? JSON.stringify(productData.especificaciones) : null
+      productData.especificaciones
+        ? JSON.stringify(productData.especificaciones)
+        : null,
     ];
     const result = await pool.query(query, values);
     return result.rows[0];
@@ -64,8 +66,10 @@ export const disenoRepository = {
       productData.archivoUrl,
       productData.precioBase,
       productData.formato || null,
-      productData.especificaciones ? JSON.stringify(productData.especificaciones) : null,
-      id
+      productData.especificaciones
+        ? JSON.stringify(productData.especificaciones)
+        : null,
+      id,
     ];
     const result = await pool.query(query, values);
     return result.rows[0];
@@ -79,12 +83,17 @@ export const disenoRepository = {
 
     for (const [key, value] of Object.entries(updates)) {
       // Mapeamos los nombres del body a las columnas de la BD
-      const dbCol = key === 'imagenUrl' ? 'imagen_url' : 
-                    key === 'archivoUrl' ? 'archivo_url' : 
-                    key === 'precioBase' ? 'precio_base' : key;
-      
+      const dbCol =
+        key === "imagenUrl"
+          ? "imagen_url"
+          : key === "archivoUrl"
+            ? "archivo_url"
+            : key === "precioBase"
+              ? "precio_base"
+              : key;
+
       fields.push(`${dbCol} = $${queryIndex}`);
-      values.push(key === 'especificaciones' ? JSON.stringify(value) : value);
+      values.push(key === "especificaciones" ? JSON.stringify(value) : value);
       queryIndex++;
     }
 
@@ -94,7 +103,7 @@ export const disenoRepository = {
 
     const query = `
       UPDATE disenos 
-      SET ${fields.join(', ')} 
+      SET ${fields.join(", ")} 
       WHERE id = $${queryIndex}
       RETURNING *;
     `;
@@ -107,5 +116,5 @@ export const disenoRepository = {
     const query = `DELETE FROM disenos WHERE id = $1 RETURNING id;`;
     const result = await pool.query(query, [id]);
     return result.rows[0];
-  }
+  },
 };
