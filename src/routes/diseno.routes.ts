@@ -7,20 +7,22 @@ import {
   deleteProduct
 } from '../controllers/diseno.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { validateSchema } from '../middlewares/validate.middleware';
+import { createProductSchema, updateProductSchema, partialUpdateProductSchema } from '../schemas/diseno.schema';
 
 const router = Router();
 
 // Obtener todos los productos (público)
 router.get('/', getAllProducts);
 
-// Crear un producto (protegido por auth)
-router.post('/', authenticateToken, createProduct);
+// Crear un producto (protegido por auth + Zod)
+router.post('/', authenticateToken, validateSchema(createProductSchema), createProduct);
 
-// Actualizar un producto completo (protegido por auth)
-router.put('/:id', authenticateToken, updateProduct);
+// Actualizar un producto completo (protegido por auth + Zod)
+router.put('/:id', authenticateToken, validateSchema(updateProductSchema), updateProduct);
 
-// Actualización parcial de un producto (protegido por auth)
-router.patch('/:id', authenticateToken, partialUpdateProduct);
+// Actualización parcial de un producto (protegido por auth + Zod)
+router.patch('/:id', authenticateToken, validateSchema(partialUpdateProductSchema), partialUpdateProduct);
 
 // Eliminar un producto (protegido por auth)
 router.delete('/:id', authenticateToken, deleteProduct);
