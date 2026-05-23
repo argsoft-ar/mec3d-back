@@ -74,7 +74,7 @@ import pool from "../config/db.config";
           "https://storage.mec3d.com/files/engranaje-helicoidal-20t.stl",
         imagen_url:
           "https://placehold.co/600x400?text=Engranaje+Helicoidal+20T",
-        precio_base: 1200.0,
+        precio_base: 1200,
         rating: 4.8,
         review_count: 34,
         descargas: 145,
@@ -96,7 +96,7 @@ import pool from "../config/db.config";
           "https://storage.mec3d.com/files/soporte-articulado-monitor.stl",
         imagen_url:
           "https://placehold.co/600x400?text=Soporte+Articulado+Monitor",
-        precio_base: 2800.0,
+        precio_base: 2800,
         rating: 4.5,
         review_count: 21,
         descargas: 98,
@@ -118,7 +118,7 @@ import pool from "../config/db.config";
           "https://storage.mec3d.com/files/maceta-geometrica-facetada.stl",
         imagen_url:
           "https://placehold.co/600x400?text=Maceta+Geometrica+Facetada",
-        precio_base: 750.0,
+        precio_base: 750,
         rating: 4.9,
         review_count: 47,
         descargas: 190,
@@ -140,7 +140,7 @@ import pool from "../config/db.config";
           "https://storage.mec3d.com/files/marco-decorativo-entrelazado.obj",
         imagen_url:
           "https://placehold.co/600x400?text=Marco+Decorativo+Entrelazado",
-        precio_base: 500.0,
+        precio_base: 500,
         rating: 3.8,
         review_count: 8,
         descargas: 32,
@@ -161,7 +161,7 @@ import pool from "../config/db.config";
         archivo_url:
           "https://storage.mec3d.com/files/carcasa-raspberry-pi4.stl",
         imagen_url: "https://placehold.co/600x400?text=Carcasa+Raspberry+Pi+4",
-        precio_base: 1800.0,
+        precio_base: 1800,
         rating: 4.7,
         review_count: 29,
         descargas: 167,
@@ -185,7 +185,7 @@ import pool from "../config/db.config";
         archivo_url:
           "https://storage.mec3d.com/files/clip-organizador-cables.stl",
         imagen_url: "https://placehold.co/600x400?text=Clip+Organizador+Cables",
-        precio_base: 600.0,
+        precio_base: 600,
         rating: 3.5,
         review_count: 3,
         descargas: 18,
