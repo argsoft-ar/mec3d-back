@@ -1,0 +1,34 @@
+name: CI
+
+# Corre en feature branches y en PRs contra cualquier rama.
+# main y develop tienen sus propios workflows de deploy.
+on:
+  push:
+    branches-ignore: [main, develop]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test-and-build:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      JWT_SECRET: ci_test_secret_not_for_production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:ci
+
+      - name: Build TypeScript
+        run: npm run build
