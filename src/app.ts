@@ -12,8 +12,8 @@ const app: Application = express();
 // Lista de orígenes permitidos (soporta múltiples separados por coma)
 // Se eliminan slashes finales para evitar mismatch con el header Origin del browser
 const allowedOrigins = envConfig.cors.origin
-  .split(',')
-  .map((o) => o.trim().replace(/\/+$/, ''));
+  .split(",")
+  .map((o) => o.trim().replace(/\/+$/, ""));
 
 // Middlewares de seguridad y utilidades
 app.use(helmet()); // Protege configurando cabeceras HTTP
