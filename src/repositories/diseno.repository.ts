@@ -1,5 +1,11 @@
 import pool from "../config/db.config";
 
+const COLUMN_MAP: Record<string, string> = {
+  imagenUrl: "imagen_url",
+  archivoUrl: "archivo_url",
+  precioBase: "precio_base",
+};
+
 interface DisenoEspecificaciones {
   material: string;
   dimensiones: string;
@@ -140,14 +146,7 @@ export const disenoRepository = {
     for (const [key, value] of Object.entries(updates)) {
       if (key === "categoria") continue;
 
-      const dbCol =
-        key === "imagenUrl"
-          ? "imagen_url"
-          : key === "archivoUrl"
-            ? "archivo_url"
-            : key === "precioBase"
-              ? "precio_base"
-              : key;
+      const dbCol = COLUMN_MAP[key] ?? key;
 
       fields.push(`${dbCol} = $${queryIndex}`);
       values.push(key === "especificaciones" ? JSON.stringify(value) : value);
