@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 
 // Cargar variables de entorno de inmediato
 dotenv.config();
@@ -6,7 +6,9 @@ dotenv.config();
 // Exportar configuraciones
 export const envConfig = {
   port: process.env.PORT || 3000,
+  nodeEnv: process.env.NODE_ENV || "development",
   db: {
+    databaseUrl: process.env.DATABASE_URL,
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     user: process.env.DB_USER,
@@ -21,5 +23,8 @@ export const envConfig = {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
-  }
+  },
+  cors: {
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+  },
 };

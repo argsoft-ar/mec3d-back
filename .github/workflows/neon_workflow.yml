@@ -1,17 +1,24 @@
-name: Create/Delete Branch for Pull Request
+name: Neon — Preview Branch per Pull Request
+
+# Crea una rama de Neon por cada PR (fresh DB para testing),
+# corre las migraciones y los tests contra esa rama,
+# y borra la rama cuando el PR se cierra.
 
 on:
   pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - closed
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
+  # ─────────────────────────────────────────
+  # 1. Obtener nombre de la rama
+  # ─────────────────────────────────────────
   setup:
     name: Setup
     outputs:
@@ -22,24 +29,26 @@ jobs:
         id: branch_name
         uses: tj-actions/branch-names@dde14ac574a8b9b1cedc59a1cf312788af43d8d8 # v8
 
+  # ─────────────────────────────────────────
+  # 2. Crear rama de Neon para el PR
+  # ─────────────────────────────────────────
   create_neon_branch:
     name: Create Neon Branch
-    outputs:
-      db_url: ${{ steps.create_neon_branch_encode.outputs.db_url }}
-      db_url_with_pooler: ${{ steps.create_neon_branch_encode.outputs.db_url_with_pooler }}
     needs: setup
     if: |
-      github.event_name == 'pull_request' && (
+      github.event.action == 'opened' ||
+      github.event.action == 'reopened' ||
       github.event.action == 'synchronize'
-      || github.event.action == 'opened'
-      || github.event.action == 'reopened')
     runs-on: ubuntu-latest
+    outputs:
+      db_url: ${{ steps.create_branch.outputs.db_url }}
+      db_url_with_pooler: ${{ steps.create_branch.outputs.db_url_with_pooler }}
     steps:
-      - name: Get branch expiration date as an env variable (2 weeks from now)
-        id: get_expiration_date
+      - name: Calcular fecha de expiración (2 semanas)
         run: echo "EXPIRES_AT=$(date -u --date '+14 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
       - name: Create Neon Branch
-        id: create_neon_branch
+        id: create_branch
         uses: neondatabase/create-branch-action@fb620d43d4c565abaf088b848a4e28e5c4ea4d9c # v6
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
@@ -47,46 +56,51 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           expires_at: ${{ env.EXPIRES_AT }}
 
-  # The step above creates a new Neon branch.
-  # You may want to do something with the new branch, such as run migrations, run tests
-  # on it, or send the connection details to a hosting platform environment.
-  # The branch DATABASE_URL is available to you via:
-  # "${{ steps.create_neon_branch.outputs.db_url_with_pooler }}".
-  # It's important you don't log the DATABASE_URL as output as it contains a username and
-  # password for your database.
-  # For example, you can uncomment the lines below to run a database migration command:
-  #      - name: Run Migrations
-  #        run: npm run db:migrate
-  #        env:
-  #          # to use pooled connection
-  #          DATABASE_URL: "${{ steps.create_neon_branch.outputs.db_url_with_pooler }}"
-  #          # OR to use unpooled connection
-  #          # DATABASE_URL: "${{ steps.create_neon_branch.outputs.db_url }}"
+  # ─────────────────────────────────────────
+  # 3. Inicializar schema + correr tests
+  # ─────────────────────────────────────────
+  migrate_and_test:
+    name: Migrate DB & Run Tests
+    needs: [setup, create_neon_branch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  # Following the step above, which runs database migrations, you may want to check
-  # for schema changes in your database. We recommend using the following action to
-  # post a comment to your pull request with the schema diff. For this action to work,
-  # you also need to give permissions to the workflow job to be able to post comments
-  # and read your repository contents. Add the following permissions to the workflow job:
-  #
-  # permissions:
-  #   contents: read
-  #   pull-requests: write
-  #
-  # You can also check out https://github.com/neondatabase/schema-diff-action for more
-  # information on how to use the schema diff action.
-  # You can uncomment the lines below to enable the schema diff action.
-  #      - name: Post Schema Diff Comment to PR
-  #        uses: neondatabase/schema-diff-action@v1
-  #        with:
-  #          project_id: ${{ vars.NEON_PROJECT_ID }}
-  #          compare_branch: preview/pr-${{ github.event.number }}-${{ needs.setup.outputs.branch }}
-  #          api_key: ${{ secrets.NEON_API_KEY }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Init schema en la rama preview
+        run: npm run db:init
+        env:
+          DATABASE_URL: ${{ needs.create_neon_branch.outputs.db_url_with_pooler }}
+          NODE_ENV: test
+
+      - name: Run tests
+        run: npm run test:ci
+        env:
+          DATABASE_URL: ${{ needs.create_neon_branch.outputs.db_url_with_pooler }}
+          NODE_ENV: test
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
+      - name: Post schema diff como comentario en el PR
+        uses: neondatabase/schema-diff-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          compare_branch: preview/pr-${{ github.event.number }}-${{ needs.setup.outputs.branch }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+  # ─────────────────────────────────────────
+  # 4. Borrar la rama cuando el PR se cierra
+  # ─────────────────────────────────────────
   delete_neon_branch:
     name: Delete Neon Branch
     needs: setup
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
       - name: Delete Neon Branch
