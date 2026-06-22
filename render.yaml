@@ -1,0 +1,38 @@
+# render.yaml — Blueprint para Render
+# Docs: https://render.com/docs/blueprint-spec
+#
+# IMPORTANTE: autoDeploy está desactivado. Los deploys se disparan
+# exclusivamente desde GitHub Actions, después de que los tests pasen.
+
+services:
+  - type: web
+    name: mec3d-api
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/server.js
+    healthCheckPath: /api/v1/health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Neon — connection string de la rama principal
+      # Seteá el valor desde el dashboard de Render o vía un Environment Group
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      # URL del frontend en Vercel (producción)
+      - key: CORS_ORIGIN
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: MP_ACCESS_TOKEN
+        sync: false
