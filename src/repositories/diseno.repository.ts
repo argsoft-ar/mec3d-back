@@ -179,4 +179,28 @@ export const disenoRepository = {
     const result = await pool.query(query, [id]);
     return result.rows[0];
   },
+
+  async getById(id: string) {
+    const query = `SELECT * FROM disenos WHERE id = $1;`;
+    const result = await pool.query(query, [id]);
+    return result.rows[0] ?? null;
+  },
+
+  async getByDesigner(designerId: string) {
+    const query = `
+      SELECT 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        u.id AS designer_id,
+        u.tagline AS designer_tagline,
+        split_part(u.email, '@', 1) AS designer_name,
+        c.nombre AS categoria_nombre
+      FROM disenos d
+      JOIN usuarios u ON d.disenador_id = u.id
+      LEFT JOIN categorias c ON d.categoria_id = c.id
+      WHERE d.disenador_id = $1;
+    `;
+    const result = await pool.query(query, [designerId]);
+    return result.rows;
+  },
 };

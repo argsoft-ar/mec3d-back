@@ -100,6 +100,17 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
 export const updateProduct = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    const existing = await disenoRepository.getById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Producto no encontrado' });
+      return;
+    }
+    if (existing.disenador_id !== req.user?.id) {
+      res.status(403).json({ error: 'No autorizado para modificar este diseño' });
+      return;
+    }
+
     const { 
         titulo, descripcion, imagenUrl, archivoUrl, 
         precioBase, formato, especificaciones 
@@ -109,11 +120,6 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
         titulo, descripcion, imagenUrl, archivoUrl, 
         precioBase, formato, especificaciones
     });
-
-    if (!updated) {
-      res.status(404).json({ error: 'Producto no encontrado' });
-      return;
-    }
 
     res.status(200).json({ message: 'Producto actualizado exitosamente', data: updated });
   } catch (error) {
@@ -125,6 +131,17 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
 export const partialUpdateProduct = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    const existing = await disenoRepository.getById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Producto no encontrado o sin cambios válidos' });
+      return;
+    }
+    if (existing.disenador_id !== req.user?.id) {
+      res.status(403).json({ error: 'No autorizado para modificar este diseño' });
+      return;
+    }
+
     const updates = req.body;
 
     // Remover propiedades que no deberían ser actualizables por el usuario (seguridad extra)
@@ -148,6 +165,16 @@ export const partialUpdateProduct = async (req: Request, res: Response): Promise
 export const deleteProduct = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const existing = await disenoRepository.getById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Producto no encontrado' });
+      return;
+    }
+    if (existing.disenador_id !== req.user?.id) {
+      res.status(403).json({ error: 'No autorizado para eliminar este diseño' });
+      return;
+    }
+
     const deleted = await disenoRepository.deleteProduct(id);
 
     if (!deleted) {
@@ -159,5 +186,37 @@ export const deleteProduct = async (req: Request, res: Response): Promise<void> 
   } catch (error) {
     console.error('❌ Error eliminando producto:', error);
     res.status(500).json({ error: 'Error al eliminar producto' });
+  }
+};
+
+export const getMyProducts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: 'No autorizado' });
+      return;
+    }
+    const rawProducts = await disenoRepository.getByDesigner(userId);
+    const formattedProducts: Product[] = rawProducts.map((row: any) => {
+      const name = row.designer_name || 'Anónimo';
+      const initials = name.substring(0, 2).toUpperCase();
+      return {
+        id: row.id,
+        title: row.titulo,
+        description: row.descripcion || '',
+        imageUrl: row.imagen_url || 'https://via.placeholder.com/300',
+        rating: Number.parseFloat(row.rating) || 0,
+        reviewCount: Number.parseInt(row.review_count) || 0,
+        downloads: Number.parseInt(row.descargas) || 0,
+        price: Number.parseFloat(row.precio_base) || 0,
+        format: row.formato || 'STL',
+        specs: row.especificaciones || [],
+        designer: { name, initials, tagline: row.designer_tagline || 'Diseñador 3D' }
+      };
+    });
+    res.status(200).json(formattedProducts);
+  } catch (error) {
+    console.error('❌ Error obteniendo mis productos:', error);
+    res.status(500).json({ error: 'Error al obtener tus productos' });
   }
 };
