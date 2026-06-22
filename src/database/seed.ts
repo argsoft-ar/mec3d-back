@@ -73,7 +73,7 @@ import pool from "../config/db.config";
         archivo_url:
           "https://storage.mec3d.com/files/soporte-filtro-aire-universal.stl",
         imagen_url: "https://placehold.co/600x400?text=Soporte+Filtro+Aire",
-        precio_base: 1500.0,
+        precio_base: 1500,
         rating: 4.6,
         review_count: 18,
         descargas: 72,
@@ -95,7 +95,7 @@ import pool from "../config/db.config";
         archivo_url:
           "https://storage.mec3d.com/files/protector-cadena-moto.stl",
         imagen_url: "https://placehold.co/600x400?text=Protector+Cadena+Moto",
-        precio_base: 1200.0,
+        precio_base: 1200,
         rating: 4.3,
         review_count: 12,
         descargas: 58,
@@ -118,7 +118,7 @@ import pool from "../config/db.config";
           "https://storage.mec3d.com/files/soporte-cornamusa-nautica.stl",
         imagen_url:
           "https://placehold.co/600x400?text=Soporte+Cornamusa+Nautica",
-        precio_base: 900.0,
+        precio_base: 900,
         rating: 4.1,
         review_count: 7,
         descargas: 34,
@@ -140,7 +140,7 @@ import pool from "../config/db.config";
         archivo_url:
           "https://storage.mec3d.com/files/soporte-cerradura-seguridad.stl",
         imagen_url: "https://placehold.co/600x400?text=Soporte+Cerradura",
-        precio_base: 750.0,
+        precio_base: 750,
         rating: 4.4,
         review_count: 22,
         descargas: 90,
@@ -162,7 +162,7 @@ import pool from "../config/db.config";
         archivo_url:
           "https://storage.mec3d.com/files/guia-corte-sierra-cinta.stl",
         imagen_url: "https://placehold.co/600x400?text=Guia+Corte+Sierra+Cinta",
-        precio_base: 2200.0,
+        precio_base: 2200,
         rating: 4.7,
         review_count: 15,
         descargas: 61,
@@ -185,7 +185,7 @@ import pool from "../config/db.config";
           "https://storage.mec3d.com/files/engranaje-helicoidal-20t.stl",
         imagen_url:
           "https://placehold.co/600x400?text=Engranaje+Helicoidal+20T",
-        precio_base: 1800.0,
+        precio_base: 1800,
         rating: 4.8,
         review_count: 34,
         descargas: 145,
