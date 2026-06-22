@@ -4,13 +4,17 @@ import {
   createProduct,
   updateProduct,
   partialUpdateProduct,
-  deleteProduct
+  deleteProduct,
+  getMyProducts
 } from '../controllers/diseno.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { validateSchema } from '../middlewares/validate.middleware';
 import { createProductSchema, updateProductSchema, partialUpdateProductSchema } from '../schemas/diseno.schema';
 
 const router = Router();
+
+// Obtener mis productos (protegido por auth)
+router.get('/mis-disenos', authenticateToken, getMyProducts);
 
 // Obtener todos los productos (público)
 router.get('/', getAllProducts);
