@@ -1,10 +1,14 @@
 import { Pool } from "pg";
 import { envConfig } from "./env.config";
 
+const isProduction = envConfig.nodeEnv === "production";
+
 const pool = envConfig.db.databaseUrl
   ? new Pool({
       connectionString: envConfig.db.databaseUrl,
-      ssl: { rejectUnauthorized: false },
+      ssl: isProduction
+        ? { rejectUnauthorized: true } // Validar certificados en producción
+        : { rejectUnauthorized: false }, // Permitir en desarrollo (Neon, etc.)
     })
   : new Pool({
       host: envConfig.db.host,

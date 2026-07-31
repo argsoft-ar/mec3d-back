@@ -1,3 +1,6 @@
-// Aquí se definirán las interfaces y tipos de TypeScript compartidos.
-// Ej: user.interface.ts, auth.interface.ts
-export {};
+export * from "./user.interface";
+export * from "./auth.interface";
+export * from "./product.interface";
+export * from "./pagination.interface";
+export * from "./api-response.interface";
+export * from "./georef.interface";

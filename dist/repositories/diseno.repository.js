@@ -27,6 +27,45 @@ exports.disenoRepository = {
         const result = await db_config_1.default.query(query);
         return result.rows;
     },
+    async getAllProductsPaginated(limit, offset) {
+        const countQuery = `SELECT COUNT(*) FROM disenos;`;
+        const countResult = await db_config_1.default.query(countQuery);
+        const total = parseInt(countResult.rows[0].count, 10);
+        const query = `
+      SELECT 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        u.id AS designer_id,
+        u.tagline AS designer_tagline,
+        split_part(u.email, '@', 1) AS designer_name,
+        c.nombre AS categoria_nombre
+      FROM disenos d
+      JOIN usuarios u ON d.disenador_id = u.id
+      LEFT JOIN categorias c ON d.categoria_id = c.id
+      ORDER BY d.creado_en DESC
+      LIMIT $1 OFFSET $2;
+    `;
+        const result = await db_config_1.default.query(query, [limit, offset]);
+        return { rows: result.rows, total };
+    },
+    async getByIdWithDesigner(id) {
+        const query = `
+      SELECT 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        d.disenador_id,
+        u.id AS designer_id,
+        u.tagline AS designer_tagline,
+        split_part(u.email, '@', 1) AS designer_name,
+        c.nombre AS categoria_nombre
+      FROM disenos d
+      JOIN usuarios u ON d.disenador_id = u.id
+      LEFT JOIN categorias c ON d.categoria_id = c.id
+      WHERE d.id = $1;
+    `;
+        const result = await db_config_1.default.query(query, [id]);
+        return result.rows[0] ?? null;
+    },
     async createProduct(productData) {
         let categoriaId = null;
         if (productData.categoria) {
@@ -129,5 +168,27 @@ exports.disenoRepository = {
         const query = `DELETE FROM disenos WHERE id = $1 RETURNING id;`;
         const result = await db_config_1.default.query(query, [id]);
         return result.rows[0];
+    },
+    async getById(id) {
+        const query = `SELECT * FROM disenos WHERE id = $1;`;
+        const result = await db_config_1.default.query(query, [id]);
+        return result.rows[0] ?? null;
+    },
+    async getByDesigner(designerId) {
+        const query = `
+      SELECT 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        u.id AS designer_id,
+        u.tagline AS designer_tagline,
+        split_part(u.email, '@', 1) AS designer_name,
+        c.nombre AS categoria_nombre
+      FROM disenos d
+      JOIN usuarios u ON d.disenador_id = u.id
+      LEFT JOIN categorias c ON d.categoria_id = c.id
+      WHERE d.disenador_id = $1;
+    `;
+        const result = await db_config_1.default.query(query, [designerId]);
+        return result.rows;
     },
 };
