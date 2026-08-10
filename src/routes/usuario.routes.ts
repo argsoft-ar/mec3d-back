@@ -17,9 +17,23 @@ import {
 const router = Router();
 
 router.get("/perfil", authenticateToken, getMyProfile);
-router.put("/perfil", authenticateToken, validateSchema(updateProfileSchema), updateMyProfile);
-router.put("/materiales", authenticateToken, validateSchema(setMaterialesSchema), setMisMateriales);
-router.get("/fabricantes", validateSchema(getFabricantesSchema), getFabricantesCercanos);
+router.put(
+  "/perfil",
+  authenticateToken,
+  validateSchema(updateProfileSchema),
+  updateMyProfile,
+);
+router.put(
+  "/materiales",
+  authenticateToken,
+  validateSchema(setMaterialesSchema),
+  setMisMateriales,
+);
+router.get(
+  "/fabricantes",
+  validateSchema(getFabricantesSchema),
+  getFabricantesCercanos,
+);
 router.get("/fabricantes/:id", getFabricanteById);
 
 export default router;

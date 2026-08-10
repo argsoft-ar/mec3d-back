@@ -1,4 +1,4 @@
-import pool from '../config/db.config';
+import pool from "../config/db.config";
 
 const createTables = async () => {
   const ddlQuery = `
@@ -85,11 +85,13 @@ const createTables = async () => {
   `;
 
   try {
-    console.log('🔄 Borrando base de datos antigua y recreando tablas...');
+    console.log("🔄 Borrando base de datos antigua y recreando tablas...");
     await pool.query(ddlQuery);
-    console.log('✅ Esquema DDL inicializado con éxito (con campos del Frontend)');
+    console.log(
+      "✅ Esquema DDL inicializado con éxito (con campos del Frontend)",
+    );
   } catch (error) {
-    console.error('❌ Error inicializando base de datos:', error);
+    console.error("❌ Error inicializando base de datos:", error);
   } finally {
     await pool.end();
   }

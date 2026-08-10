@@ -21,9 +21,6 @@ export const setMaterialesSchema = z.object({
 
 export const getFabricantesSchema = z.object({
   query: z.object({
-    zonaId: z
-      .string()
-      .regex(/^\d+$/, "zonaId debe ser numérico")
-      .optional(),
+    zonaId: z.string().regex(/^\d+$/, "zonaId debe ser numérico").optional(),
   }),
 });
