@@ -10,6 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:ci": "jest --ci --runInBand --forceExit",
+    "db:migrate": "ts-node src/database/migrate.ts",
     "db:init": "ts-node src/database/init.ts",
     "db:seed": "ts-node src/database/seed.ts",
     "db:reset": "npm run db:init && npm run db:seed",

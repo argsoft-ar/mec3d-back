@@ -8,6 +8,8 @@ export interface User {
   puntuacion: number;
   cuentaMercadopago: string | null;
   tagline: string | null;
+  descripcion: string | null;
+  experiencia: string | null;
   creadoEn: string;
   actualizadoEn: string;
 }
@@ -25,4 +27,29 @@ export interface UserResponse {
   rolPrincipal: RolUsuario;
   zonaId: number | null;
   cuentaMercadopago: string | null;
+}
+
+export interface Material {
+  id: number;
+  material: string;
+  disponible: boolean;
+}
+
+export interface UpdateProfileDTO {
+  tagline?: string;
+  descripcion?: string;
+  experiencia?: string;
+  zonaId?: number;
+  cuentaMercadopago?: string;
+}
+
+export interface FabricantePublico {
+  id: string;
+  email: string;
+  zonaId: number | null;
+  puntuacion: number;
+  tagline: string | null;
+  descripcion: string | null;
+  experiencia: string | null;
+  materiales: Material[];
 }

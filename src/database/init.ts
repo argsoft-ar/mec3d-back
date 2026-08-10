@@ -6,6 +6,7 @@ const createTables = async () => {
     DROP TABLE IF EXISTS productos_fisicos CASCADE;
     DROP TABLE IF EXISTS disenos CASCADE;
     DROP TABLE IF EXISTS categorias CASCADE;
+    DROP TABLE IF EXISTS fabricante_materiales CASCADE;
     DROP TABLE IF EXISTS usuarios CASCADE;
     
     -- Borrar ENUMs si existen (requiere un bloque DO para manejar errores limpiamente si no existen)
@@ -29,9 +30,21 @@ const createTables = async () => {
         zona_id INTEGER, 
         puntuacion DECIMAL(3,2) DEFAULT 0.00,
         cuenta_mercadopago VARCHAR(255),
-        tagline VARCHAR(255), -- NUEVO: tagline del diseñador
+        tagline VARCHAR(255),
+        descripcion TEXT,
+        experiencia TEXT,
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE fabricante_materiales (
+        id SERIAL PRIMARY KEY,
+        fabricante_id UUID NOT NULL,
+        material VARCHAR(100) NOT NULL,
+        disponible BOOLEAN DEFAULT true,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_fabricante_mat FOREIGN KEY (fabricante_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        CONSTRAINT uq_fabricante_material UNIQUE (fabricante_id, material)
     );
 
     CREATE TABLE categorias (
