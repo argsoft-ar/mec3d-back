@@ -1,5 +1,5 @@
-import pool from '../config/db.config';
-import { Material, UpdateProfileDTO } from '../interfaces/user.interface';
+import pool from "../config/db.config";
+import { Material, UpdateProfileDTO } from "../interfaces/user.interface";
 
 export const userRepository = {
   async findByEmail(email: string) {
@@ -23,7 +23,7 @@ export const userRepository = {
       VALUES ($1, $2, $3, $4)
       RETURNING id, email, rol_principal, zona_id, creado_en;
     `;
-    
+
     const values = [
       userData.email,
       userData.passwordHash,
@@ -51,11 +51,26 @@ export const userRepository = {
     const values: unknown[] = [];
     let idx = 1;
 
-    if (data.tagline !== undefined)           { fields.push(`tagline = $${idx++}`);            values.push(data.tagline); }
-    if (data.descripcion !== undefined)       { fields.push(`descripcion = $${idx++}`);        values.push(data.descripcion); }
-    if (data.experiencia !== undefined)       { fields.push(`experiencia = $${idx++}`);        values.push(data.experiencia); }
-    if (data.zonaId !== undefined)            { fields.push(`zona_id = $${idx++}`);            values.push(data.zonaId); }
-    if (data.cuentaMercadopago !== undefined) { fields.push(`cuenta_mercadopago = $${idx++}`); values.push(data.cuentaMercadopago); }
+    if (data.tagline !== undefined) {
+      fields.push(`tagline = $${idx++}`);
+      values.push(data.tagline);
+    }
+    if (data.descripcion !== undefined) {
+      fields.push(`descripcion = $${idx++}`);
+      values.push(data.descripcion);
+    }
+    if (data.experiencia !== undefined) {
+      fields.push(`experiencia = $${idx++}`);
+      values.push(data.experiencia);
+    }
+    if (data.zonaId !== undefined) {
+      fields.push(`zona_id = $${idx++}`);
+      values.push(data.zonaId);
+    }
+    if (data.cuentaMercadopago !== undefined) {
+      fields.push(`cuenta_mercadopago = $${idx++}`);
+      values.push(data.cuentaMercadopago);
+    }
 
     if (fields.length === 0) return this.findById(id);
 
@@ -64,7 +79,7 @@ export const userRepository = {
 
     const query = `
       UPDATE usuarios
-      SET ${fields.join(', ')}
+      SET ${fields.join(", ")}
       WHERE id = $${idx}
       RETURNING id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
                 tagline, descripcion, experiencia, actualizado_en;
@@ -84,28 +99,39 @@ export const userRepository = {
     return result.rows;
   },
 
-  async setMaterialesFabricante(fabricanteId: string, materiales: string[]): Promise<void> {
+  async setMaterialesFabricante(
+    fabricanteId: string,
+    materiales: string[],
+  ): Promise<void> {
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM fabricante_materiales WHERE fabricante_id = $1', [fabricanteId]);
+      await client.query("BEGIN");
+      await client.query(
+        "DELETE FROM fabricante_materiales WHERE fabricante_id = $1",
+        [fabricanteId],
+      );
       if (materiales.length > 0) {
-        const placeholders = materiales.map((_, i) => `($1, $${i + 2})`).join(', ');
+        const placeholders = materiales
+          .map((_, i) => `($1, $${i + 2})`)
+          .join(", ");
         await client.query(
           `INSERT INTO fabricante_materiales (fabricante_id, material) VALUES ${placeholders}`,
           [fabricanteId, ...materiales],
         );
       }
-      await client.query('COMMIT');
+      await client.query("COMMIT");
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       throw error;
     } finally {
       client.release();
     }
   },
 
-  async getFabricantesCercanos(zonaId: number | null, provinciaPrefix: string | null): Promise<any[]> {
+  async getFabricantesCercanos(
+    zonaId: number | null,
+    provinciaPrefix: string | null,
+  ): Promise<any[]> {
     const query = `
       SELECT
         u.id, u.email, u.zona_id, u.puntuacion, u.tagline, u.descripcion, u.experiencia,

@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from "express";
 import { usuarioService } from "../services/usuario.service";
 import { UpdateProfileDTO } from "../interfaces/user.interface";
 
-export const getMyProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getMyProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const profile = await usuarioService.getProfile(req.user!.id);
     res.status(200).json(profile);
@@ -11,7 +15,11 @@ export const getMyProfile = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-export const updateMyProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const updateMyProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const data: UpdateProfileDTO = req.body;
     const updated = await usuarioService.updateProfile(req.user!.id, data);
@@ -21,19 +29,33 @@ export const updateMyProfile = async (req: Request, res: Response, next: NextFun
   }
 };
 
-export const setMisMateriales = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const setMisMateriales = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const { materiales } = req.body as { materiales: string[] };
-    const result = await usuarioService.setMateriales(req.user!.id, req.user!.rolPrincipal, materiales);
+    const result = await usuarioService.setMateriales(
+      req.user!.id,
+      req.user!.rolPrincipal,
+      materiales,
+    );
     res.status(200).json(result);
   } catch (error) {
     next(error);
   }
 };
 
-export const getFabricantesCercanos = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getFabricantesCercanos = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
-    const zonaId = req.query.zonaId ? parseInt(req.query.zonaId as string, 10) : undefined;
+    const zonaId = req.query.zonaId
+      ? parseInt(req.query.zonaId as string, 10)
+      : undefined;
     const fabricantes = await usuarioService.getFabricantesCercanos(zonaId);
     res.status(200).json(fabricantes);
   } catch (error) {
@@ -41,7 +63,11 @@ export const getFabricantesCercanos = async (req: Request, res: Response, next: 
   }
 };
 
-export const getFabricanteById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getFabricanteById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const profile = await usuarioService.getProfile(req.params.id);
     res.status(200).json(profile);

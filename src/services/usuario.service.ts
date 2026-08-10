@@ -20,16 +20,25 @@ export const usuarioService = {
     return mapUserRow(updated);
   },
 
-  async setMateriales(userId: string, rolPrincipal: string, materiales: string[]) {
+  async setMateriales(
+    userId: string,
+    rolPrincipal: string,
+    materiales: string[],
+  ) {
     if (rolPrincipal !== "fabricante")
-      throw new ForbiddenError("Solo los fabricantes pueden configurar materiales");
+      throw new ForbiddenError(
+        "Solo los fabricantes pueden configurar materiales",
+      );
     await userRepository.setMaterialesFabricante(userId, materiales);
     return userRepository.getMaterialesFabricante(userId);
   },
 
   async getFabricantesCercanos(zonaId?: number) {
     const provinciaPrefix = zonaId != null ? getProvinciaPrefix(zonaId) : null;
-    return userRepository.getFabricantesCercanos(zonaId ?? null, provinciaPrefix);
+    return userRepository.getFabricantesCercanos(
+      zonaId ?? null,
+      provinciaPrefix,
+    );
   },
 };
 
