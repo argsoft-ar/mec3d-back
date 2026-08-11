@@ -19,7 +19,7 @@ export const authenticateToken = (
   const payload = verifyToken(token);
 
   if (!payload) {
-    res.status(403).json({ error: "Token inválido o expirado." });
+    res.status(401).json({ error: "Token inválido o expirado." });
     return;
   }
 

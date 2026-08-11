@@ -1,4 +1,8 @@
 import pool from "../config/db.config";
+<<<<<<< HEAD
+=======
+import { Material, UpdateProfileDTO } from "../interfaces/user.interface";
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
 
 export const userRepository = {
   async findByEmail(email: string) {
@@ -38,6 +42,7 @@ export const userRepository = {
 
   async findById(id: string) {
     const query = `
+<<<<<<< HEAD
       SELECT 
         u.id, u.email, u.rol_principal, u.zona_id, u.puntuacion,
         u.cuenta_mercadopago, u.tagline, u.descripcion, u.experiencia,
@@ -52,11 +57,18 @@ export const userRepository = {
       LEFT JOIN materiales m ON m.usuario_id = u.id
       WHERE u.id = $1
       GROUP BY u.id;
+=======
+      SELECT id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
+             tagline, descripcion, experiencia, creado_en, actualizado_en
+      FROM usuarios
+      WHERE id = $1;
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     `;
     const result = await pool.query(query, [id]);
     return result.rows[0] || null;
   },
 
+<<<<<<< HEAD
   async updateUser(
     id: string,
     data: {
@@ -68,6 +80,9 @@ export const userRepository = {
       georefLocalidadId?: string;
     },
   ) {
+=======
+  async updateProfile(id: string, data: UpdateProfileDTO) {
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     const fields: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -92,16 +107,20 @@ export const userRepository = {
       fields.push(`cuenta_mercadopago = $${idx++}`);
       values.push(data.cuentaMercadopago);
     }
+<<<<<<< HEAD
     if (data.georefLocalidadId !== undefined) {
       fields.push(`georef_localidad_id = $${idx++}`);
       values.push(data.georefLocalidadId);
     }
+=======
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
 
     if (fields.length === 0) return this.findById(id);
 
     fields.push(`actualizado_en = CURRENT_TIMESTAMP`);
     values.push(id);
 
+<<<<<<< HEAD
     const query = `UPDATE usuarios SET ${fields.join(", ")} WHERE id = $${idx} RETURNING id;`;
     await pool.query(query, values);
     return this.findById(id);
@@ -124,6 +143,90 @@ export const userRepository = {
       `SELECT id, material, disponible FROM materiales WHERE usuario_id = $1 ORDER BY id`,
       [usuarioId],
     );
+=======
+    const query = `
+      UPDATE usuarios
+      SET ${fields.join(", ")}
+      WHERE id = $${idx}
+      RETURNING id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
+                tagline, descripcion, experiencia, actualizado_en;
+    `;
+    const result = await pool.query(query, values);
+    return result.rows[0] || null;
+  },
+
+  async getMaterialesFabricante(fabricanteId: string): Promise<Material[]> {
+    const query = `
+      SELECT id, material, disponible
+      FROM fabricante_materiales
+      WHERE fabricante_id = $1
+      ORDER BY material;
+    `;
+    const result = await pool.query(query, [fabricanteId]);
+    return result.rows;
+  },
+
+  async setMaterialesFabricante(
+    fabricanteId: string,
+    materiales: string[],
+  ): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "DELETE FROM fabricante_materiales WHERE fabricante_id = $1",
+        [fabricanteId],
+      );
+      if (materiales.length > 0) {
+        const placeholders = materiales
+          .map((_, i) => `($1, $${i + 2})`)
+          .join(", ");
+        await client.query(
+          `INSERT INTO fabricante_materiales (fabricante_id, material) VALUES ${placeholders}`,
+          [fabricanteId, ...materiales],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async getFabricantesCercanos(
+    zonaId: number | null,
+    provinciaPrefix: string | null,
+  ): Promise<any[]> {
+    const query = `
+      SELECT
+        u.id, u.email, u.zona_id, u.puntuacion, u.tagline, u.descripcion, u.experiencia,
+        COALESCE(
+          json_agg(
+            json_build_object('id', fm.id, 'material', fm.material, 'disponible', fm.disponible)
+          ) FILTER (WHERE fm.id IS NOT NULL),
+          '[]'::json
+        ) AS materiales
+      FROM usuarios u
+      LEFT JOIN fabricante_materiales fm ON fm.fabricante_id = u.id
+      WHERE u.rol_principal = 'fabricante'
+      GROUP BY u.id
+      ORDER BY
+        CASE
+          WHEN $1::int IS NOT NULL AND u.zona_id = $1 THEN 0
+          WHEN $2::text IS NOT NULL AND u.zona_id IS NOT NULL AND (
+            CASE
+              WHEN length(u.zona_id::text) IN (8, 5) THEN substring(u.zona_id::text, 1, 2)
+              WHEN length(u.zona_id::text) IN (7, 4) THEN '0' || substring(u.zona_id::text, 1, 1)
+            END
+          ) = $2::text THEN 1
+          ELSE 2
+        END,
+        u.puntuacion DESC;
+    `;
+    const result = await pool.query(query, [zonaId, provinciaPrefix]);
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     return result.rows;
   },
 };

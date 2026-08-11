@@ -8,6 +8,8 @@ export interface User {
   puntuacion: number;
   cuentaMercadopago: string | null;
   tagline: string | null;
+  descripcion: string | null;
+  experiencia: string | null;
   creadoEn: string;
   actualizadoEn: string;
 }
@@ -27,11 +29,34 @@ export interface UserResponse {
   cuentaMercadopago: string | null;
 }
 
+<<<<<<< HEAD
+=======
+export interface Material {
+  id: number;
+  material: string;
+  disponible: boolean;
+}
+
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
 export interface UpdateProfileDTO {
   tagline?: string;
   descripcion?: string;
   experiencia?: string;
   zonaId?: number;
   cuentaMercadopago?: string;
+<<<<<<< HEAD
   georefLocalidadId?: string;
+=======
+}
+
+export interface FabricantePublico {
+  id: string;
+  email: string;
+  zonaId: number | null;
+  puntuacion: number;
+  tagline: string | null;
+  descripcion: string | null;
+  experiencia: string | null;
+  materiales: Material[];
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
 }
