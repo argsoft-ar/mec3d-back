@@ -1,8 +1,5 @@
 import pool from "../config/db.config";
-<<<<<<< HEAD
-=======
 import { Material, UpdateProfileDTO } from "../interfaces/user.interface";
->>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
 
 export const userRepository = {
   async findByEmail(email: string) {
@@ -42,47 +39,16 @@ export const userRepository = {
 
   async findById(id: string) {
     const query = `
-<<<<<<< HEAD
-      SELECT 
-        u.id, u.email, u.rol_principal, u.zona_id, u.puntuacion,
-        u.cuenta_mercadopago, u.tagline, u.descripcion, u.experiencia,
-        u.actualizado_en, u.georef_localidad_id,
-        COALESCE(
-          json_agg(
-            json_build_object('id', m.id, 'material', m.material, 'disponible', m.disponible)
-          ) FILTER (WHERE m.id IS NOT NULL),
-          '[]'
-        ) AS materiales
-      FROM usuarios u
-      LEFT JOIN materiales m ON m.usuario_id = u.id
-      WHERE u.id = $1
-      GROUP BY u.id;
-=======
       SELECT id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
              tagline, descripcion, experiencia, creado_en, actualizado_en
       FROM usuarios
       WHERE id = $1;
->>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     `;
     const result = await pool.query(query, [id]);
     return result.rows[0] || null;
   },
 
-<<<<<<< HEAD
-  async updateUser(
-    id: string,
-    data: {
-      tagline?: string;
-      descripcion?: string;
-      experiencia?: string;
-      zonaId?: number;
-      cuentaMercadopago?: string;
-      georefLocalidadId?: string;
-    },
-  ) {
-=======
   async updateProfile(id: string, data: UpdateProfileDTO) {
->>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     const fields: string[] = [];
     const values: unknown[] = [];
     let idx = 1;
@@ -107,43 +73,16 @@ export const userRepository = {
       fields.push(`cuenta_mercadopago = $${idx++}`);
       values.push(data.cuentaMercadopago);
     }
-<<<<<<< HEAD
     if (data.georefLocalidadId !== undefined) {
       fields.push(`georef_localidad_id = $${idx++}`);
       values.push(data.georefLocalidadId);
     }
-=======
->>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
 
     if (fields.length === 0) return this.findById(id);
 
     fields.push(`actualizado_en = CURRENT_TIMESTAMP`);
     values.push(id);
 
-<<<<<<< HEAD
-    const query = `UPDATE usuarios SET ${fields.join(", ")} WHERE id = $${idx} RETURNING id;`;
-    await pool.query(query, values);
-    return this.findById(id);
-  },
-
-  async setMateriales(usuarioId: string, materiales: string[]) {
-    await pool.query(`DELETE FROM materiales WHERE usuario_id = $1`, [
-      usuarioId,
-    ]);
-    if (materiales.length > 0) {
-      const placeholders = materiales
-        .map((_, i) => `($1, $${i + 2})`)
-        .join(", ");
-      await pool.query(
-        `INSERT INTO materiales (usuario_id, material) VALUES ${placeholders}`,
-        [usuarioId, ...materiales],
-      );
-    }
-    const result = await pool.query(
-      `SELECT id, material, disponible FROM materiales WHERE usuario_id = $1 ORDER BY id`,
-      [usuarioId],
-    );
-=======
     const query = `
       UPDATE usuarios
       SET ${fields.join(", ")}
@@ -226,7 +165,6 @@ export const userRepository = {
         u.puntuacion DESC;
     `;
     const result = await pool.query(query, [zonaId, provinciaPrefix]);
->>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     return result.rows;
   },
 };
