@@ -1,273 +1,139 @@
-import { Request, Response } from "express";
-import { disenoRepository } from "../repositories/diseno.repository";
-
-// Interface mapeada exactamente como espera el Frontend
-export interface ProductSpec {
-  icon?: any; // Icon lo maneja el frontend visualmente
-  title: string;
-  value: string;
-}
-
-export interface ProductDesigner {
-  initials: string;
-  name: string;
-  tagline: string;
-}
-
-export interface Product {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  rating: number;
-  reviewCount: number;
-  downloads: number;
-  price: number;
-  format: string;
-  specs: ProductSpec[];
-  designer: ProductDesigner;
-}
+import { Request, Response, NextFunction } from "express";
+import { productService } from "../services/product.service";
+import { PaginationParams } from "../interfaces/pagination.interface";
 
 export const getAllProducts = async (
   req: Request,
   res: Response,
+  next: NextFunction,
 ): Promise<void> => {
   try {
-    const rawProducts = await disenoRepository.getAllProducts();
+    const pagination: PaginationParams = {
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 12,
+    };
 
-    // Mapeo crudo de BD a la interfaz "Product"
-    const formattedProducts: Product[] = rawProducts.map((row: any) => {
-      // Generar initiales del nombre: e.g. "juan" -> "JU"
-      const name = row.designer_name || "Anónimo";
-      const initials = name.substring(0, 2).toUpperCase();
+    const zonaId = req.query.zonaId ? Number(req.query.zonaId) : undefined;
 
-      return {
-        id: row.id,
-        title: row.titulo,
-        description: row.descripcion || "",
-        imageUrl: row.imagen_url || "https://via.placeholder.com/300",
-        rating: Number.parseFloat(row.rating) || 0,
-        reviewCount: Number.parseInt(row.review_count) || 0,
-        downloads: Number.parseInt(row.descargas) || 0,
-        price: Number.parseFloat(row.precio_base) || 0,
-        format: row.formato || "STL",
-        specs: row.especificaciones || [],
-        designer: {
-          name: name,
-          initials: initials,
-          tagline: row.designer_tagline || "Diseñador 3D",
-        },
-      };
-    });
-
-    res.status(200).json(formattedProducts);
-  } catch (error: any) {
-    console.error("❌ Error obteniendo productos:", error);
-    res.status(500).json({ error: "Error al obtener los productos" });
+    const result = await productService.getAll(pagination, zonaId);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
   }
 };
 
 export const createProduct = async (
   req: Request,
   res: Response,
+  next: NextFunction,
 ): Promise<void> => {
   try {
-    // Si viene del middleware de Auth, usamos req.user!.id
-    const disenadorId = req.user?.id;
+    const userId = req.user?.id || req.body.disenadorId;
 
-    // De momento si no hay auth middleware inyectado en esta ruta, usamos uno del body o mock
-    // if (!disenadorId) return res.status(401).json({ error: "No autorizado" });
-    const {
-      titulo,
-      descripcion,
-      imagenUrl,
-      archivoUrl,
-      precioBase,
-      formato,
-      especificaciones,
-    } = req.body;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
 
-    const newProduct = await disenoRepository.createProduct({
-      disenadorId: disenadorId || req.body.disenadorId, // fallback por si probamos sin token
-      titulo,
-      descripcion,
-      imagenUrl,
-      archivoUrl,
-      precioBase,
-      formato,
-      especificaciones,
-    });
+    const product = await productService.create(req.body, userId);
 
     res.status(201).json({
       message: "Producto creado exitosamente",
-      data: newProduct,
+      data: product,
     });
-  } catch (error: any) {
-    console.error("❌ Error creando producto:", error);
-    res.status(500).json({ error: "Error al crear producto" });
+  } catch (error) {
+    next(error);
   }
 };
 
 export const updateProduct = async (
   req: Request,
   res: Response,
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
-    const existing = await disenoRepository.getById(id);
-    if (!existing) {
-      res.status(404).json({ error: "Producto no encontrado" });
-      return;
-    }
-    if (existing.disenador_id !== req.user?.id) {
-      res
-        .status(403)
-        .json({ error: "No autorizado para modificar este diseño" });
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
       return;
     }
 
-    const {
-      titulo,
-      descripcion,
-      imagenUrl,
-      archivoUrl,
-      precioBase,
-      formato,
-      especificaciones,
-    } = req.body;
+    const product = await productService.update(id, req.body, userId);
 
-    const updated = await disenoRepository.updateProduct(id, {
-      titulo,
-      descripcion,
-      imagenUrl,
-      archivoUrl,
-      precioBase,
-      formato,
-      especificaciones,
+    res.status(200).json({
+      message: "Producto actualizado exitosamente",
+      data: product,
     });
-
-    res
-      .status(200)
-      .json({ message: "Producto actualizado exitosamente", data: updated });
   } catch (error) {
-    console.error("❌ Error actualizando producto:", error);
-    res.status(500).json({ error: "Error al actualizar producto" });
+    next(error);
   }
 };
 
 export const partialUpdateProduct = async (
   req: Request,
   res: Response,
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
-    const existing = await disenoRepository.getById(id);
-    if (!existing) {
-      res
-        .status(404)
-        .json({ error: "Producto no encontrado o sin cambios válidos" });
-      return;
-    }
-    if (existing.disenador_id !== req.user?.id) {
-      res
-        .status(403)
-        .json({ error: "No autorizado para modificar este diseño" });
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
       return;
     }
 
-    const updates = req.body;
+    const product = await productService.partialUpdate(id, req.body, userId);
 
-    // Remover propiedades que no deberían ser actualizables por el usuario (seguridad extra)
-    delete updates.id;
-    delete updates.disenadorId;
-
-    const updated = await disenoRepository.partialUpdateProduct(id, updates);
-
-    if (!updated) {
-      res
-        .status(404)
-        .json({ error: "Producto no encontrado o sin cambios válidos" });
-      return;
-    }
-
-    res
-      .status(200)
-      .json({ message: "Producto modificado exitosamente", data: updated });
+    res.status(200).json({
+      message: "Producto modificado exitosamente",
+      data: product,
+    });
   } catch (error) {
-    console.error("❌ Error modificando producto:", error);
-    res.status(500).json({ error: "Error al modificar producto" });
+    next(error);
   }
 };
 
 export const deleteProduct = async (
   req: Request,
   res: Response,
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const existing = await disenoRepository.getById(id);
-    if (!existing) {
-      res.status(404).json({ error: "Producto no encontrado" });
-      return;
-    }
-    if (existing.disenador_id !== req.user?.id) {
-      res
-        .status(403)
-        .json({ error: "No autorizado para eliminar este diseño" });
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
       return;
     }
 
-    const deleted = await disenoRepository.deleteProduct(id);
-
-    if (!deleted) {
-      res.status(404).json({ error: "Producto no encontrado" });
-      return;
-    }
+    await productService.delete(id, userId);
 
     res.status(200).json({ message: "Producto eliminado exitosamente" });
   } catch (error) {
-    console.error("❌ Error eliminando producto:", error);
-    res.status(500).json({ error: "Error al eliminar producto" });
+    next(error);
   }
 };
 
 export const getMyProducts = async (
   req: Request,
   res: Response,
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const userId = req.user?.id;
+
     if (!userId) {
       res.status(401).json({ error: "No autorizado" });
       return;
     }
-    const rawProducts = await disenoRepository.getByDesigner(userId);
-    const formattedProducts: Product[] = rawProducts.map((row: any) => {
-      const name = row.designer_name || "Anónimo";
-      const initials = name.substring(0, 2).toUpperCase();
-      return {
-        id: row.id,
-        title: row.titulo,
-        description: row.descripcion || "",
-        imageUrl: row.imagen_url || "https://via.placeholder.com/300",
-        rating: Number.parseFloat(row.rating) || 0,
-        reviewCount: Number.parseInt(row.review_count) || 0,
-        downloads: Number.parseInt(row.descargas) || 0,
-        price: Number.parseFloat(row.precio_base) || 0,
-        format: row.formato || "STL",
-        specs: row.especificaciones || [],
-        designer: {
-          name,
-          initials,
-          tagline: row.designer_tagline || "Diseñador 3D",
-        },
-      };
-    });
-    res.status(200).json(formattedProducts);
+
+    const products = await productService.getByDesigner(userId);
+    res.status(200).json(products);
   } catch (error) {
-    console.error("❌ Error obteniendo mis productos:", error);
-    res.status(500).json({ error: "Error al obtener tus productos" });
+    next(error);
   }
 };

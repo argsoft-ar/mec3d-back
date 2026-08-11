@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: mec3d_db
+    volumes:
+      - mec3d_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mec3d_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mec3d_pgdata:
