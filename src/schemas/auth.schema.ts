@@ -13,7 +13,7 @@ export const registerSchema = z.object({
       .string()
       .min(8, "La contraseña debe tener al menos 8 caracteres")
       .regex(/[A-Z]/, "Debe contener al menos una mayúscula")
-      .regex(/[0-9]/, "Debe contener al menos un número"),
+      .regex(/\d/, "Debe contener al menos un número"),
     rolPrincipal: z.enum(publicRoles, {
       errorMap: () => ({
         message: "Rol no válido. Debe ser comprador, disenador o fabricante",

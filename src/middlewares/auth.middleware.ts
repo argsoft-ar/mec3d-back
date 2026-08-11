@@ -9,7 +9,7 @@ export const authenticateToken = (
   const authHeader = req.headers["authorization"];
 
   // El header usualmente tiene el formato: "Bearer <token>"
-  const token = authHeader && authHeader.split(" ")[1];
+  const token = authHeader?.split(" ")[1];
 
   if (!token) {
     res.status(401).json({ error: "Acceso denegado. Token no proporcionado." });

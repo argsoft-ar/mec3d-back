@@ -46,7 +46,7 @@ const options: swaggerJsdoc.Options = {
       ...uploadPaths,
     },
   },
-  apis: [], // No usamos JSDoc en archivos, todo está definido en este archivo
+  apis: [],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
