@@ -1,4 +1,4 @@
-import pool from '../config/db.config';
+import pool from "../config/db.config";
 
 const createTables = async () => {
   const ddlQuery = `
@@ -6,6 +6,11 @@ const createTables = async () => {
     DROP TABLE IF EXISTS productos_fisicos CASCADE;
     DROP TABLE IF EXISTS disenos CASCADE;
     DROP TABLE IF EXISTS categorias CASCADE;
+<<<<<<< HEAD
+    DROP TABLE IF EXISTS materiales CASCADE;
+=======
+    DROP TABLE IF EXISTS fabricante_materiales CASCADE;
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     DROP TABLE IF EXISTS usuarios CASCADE;
     
     -- Borrar ENUMs si existen (requiere un bloque DO para manejar errores limpiamente si no existen)
@@ -26,12 +31,34 @@ const createTables = async () => {
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         rol_principal rol_usuario NOT NULL,
-        zona_id INTEGER, 
+        zona_id INTEGER,
+        georef_localidad_id VARCHAR(20),
         puntuacion DECIMAL(3,2) DEFAULT 0.00,
         cuenta_mercadopago VARCHAR(255),
-        tagline VARCHAR(255), -- NUEVO: tagline del diseñador
+        tagline VARCHAR(255),
+        descripcion TEXT,
+        experiencia TEXT,
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+<<<<<<< HEAD
+    CREATE TABLE materiales (
+        id SERIAL PRIMARY KEY,
+        usuario_id UUID NOT NULL,
+        material VARCHAR(100) NOT NULL,
+        disponible BOOLEAN DEFAULT TRUE,
+        CONSTRAINT fk_usuario_material FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+=======
+    CREATE TABLE fabricante_materiales (
+        id SERIAL PRIMARY KEY,
+        fabricante_id UUID NOT NULL,
+        material VARCHAR(100) NOT NULL,
+        disponible BOOLEAN DEFAULT true,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_fabricante_mat FOREIGN KEY (fabricante_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        CONSTRAINT uq_fabricante_material UNIQUE (fabricante_id, material)
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
     );
 
     CREATE TABLE categorias (
@@ -72,11 +99,13 @@ const createTables = async () => {
   `;
 
   try {
-    console.log('🔄 Borrando base de datos antigua y recreando tablas...');
+    console.log("🔄 Borrando base de datos antigua y recreando tablas...");
     await pool.query(ddlQuery);
-    console.log('✅ Esquema DDL inicializado con éxito (con campos del Frontend)');
+    console.log(
+      "✅ Esquema DDL inicializado con éxito (con campos del Frontend)",
+    );
   } catch (error) {
-    console.error('❌ Error inicializando base de datos:', error);
+    console.error("❌ Error inicializando base de datos:", error);
   } finally {
     await pool.end();
   }

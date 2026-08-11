@@ -26,6 +26,7 @@ export const disenoRepository = {
         d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
+        u.zona_id AS designer_zona_id,
         split_part(u.email, '@', 1) AS designer_name,
         c.nombre AS categoria_nombre
       FROM disenos d
@@ -34,6 +35,85 @@ export const disenoRepository = {
     `;
     const result = await pool.query(query);
     return result.rows;
+  },
+
+  async getAllProductsPaginated(
+    limit: number,
+    offset: number,
+    zona?: {
+      zonaId: number;
+      provinciaPrefix: string | null;
+      partidoPrefix: string | null;
+    },
+  ): Promise<{ rows: any[]; total: number }> {
+    const countQuery = `SELECT COUNT(*) FROM disenos;`;
+    const countResult = await pool.query(countQuery);
+    const total = Number.parseInt(countResult.rows[0].count, 10);
+
+    // Con zona: prioriza misma zona (0), misma provincia por prefijo INDEC (1) y el resto (2).
+    // zona_id es INTEGER, por lo que los códigos de provincias 01-09 pierden el cero inicial:
+    // localidad canónica = 8 dígitos (7 sin cero), departamento = 5 dígitos (4 sin cero).
+    const orderByZona = `
+      ORDER BY
+        CASE
+          WHEN $4::text IS NOT NULL AND u.zona_id IS NOT NULL AND (
+            CASE
+              WHEN length(u.zona_id::text) = 8 THEN substring(u.zona_id::text, 1, 5)
+              WHEN length(u.zona_id::text) = 7 THEN '0' || substring(u.zona_id::text, 1, 4)
+            END
+          ) = $4::text THEN 0
+          WHEN $3::text IS NOT NULL AND u.zona_id IS NOT NULL AND (
+            CASE
+              WHEN length(u.zona_id::text) IN (8, 5) THEN substring(u.zona_id::text, 1, 2)
+              WHEN length(u.zona_id::text) IN (7, 4) THEN '0' || substring(u.zona_id::text, 1, 1)
+            END
+          ) = $3::text THEN 1
+          ELSE 2
+        END,
+        d.creado_en DESC
+    `;
+
+    const query = `
+      SELECT 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        u.id AS designer_id,
+        u.tagline AS designer_tagline,
+        u.zona_id AS designer_zona_id,
+        split_part(u.email, '@', 1) AS designer_name,
+        c.nombre AS categoria_nombre
+      FROM disenos d
+      JOIN usuarios u ON d.disenador_id = u.id
+      LEFT JOIN categorias c ON d.categoria_id = c.id
+      ${zona ? orderByZona : "ORDER BY d.creado_en DESC"}
+      LIMIT $1 OFFSET $2;
+    `;
+    const values: (number | string | null)[] = [limit, offset];
+    if (zona) {
+      values.push(zona.provinciaPrefix, zona.partidoPrefix);
+    }
+    const result = await pool.query(query, values);
+    return { rows: result.rows, total };
+  },
+
+  async getByIdWithDesigner(id: string) {
+    const query = `
+      SELECT 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        d.disenador_id,
+        u.id AS designer_id,
+        u.tagline AS designer_tagline,
+        u.zona_id AS designer_zona_id,
+        split_part(u.email, '@', 1) AS designer_name,
+        c.nombre AS categoria_nombre
+      FROM disenos d
+      JOIN usuarios u ON d.disenador_id = u.id
+      LEFT JOIN categorias c ON d.categoria_id = c.id
+      WHERE d.id = $1;
+    `;
+    const result = await pool.query(query, [id]);
+    return result.rows[0] ?? null;
   },
 
   async createProduct(productData: {
@@ -193,6 +273,7 @@ export const disenoRepository = {
         d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
+        u.zona_id AS designer_zona_id,
         split_part(u.email, '@', 1) AS designer_name,
         c.nombre AS categoria_nombre
       FROM disenos d
