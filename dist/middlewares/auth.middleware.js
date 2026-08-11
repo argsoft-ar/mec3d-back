@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authenticateToken = void 0;
 const jwt_util_1 = require("../utils/jwt.util");
+require("../interfaces/express.d");
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     // El header usualmente tiene el formato: "Bearer <token>"

@@ -2,10 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const pg_1 = require("pg");
 const env_config_1 = require("./env.config");
+const isProduction = env_config_1.envConfig.nodeEnv === 'production';
 const pool = env_config_1.envConfig.db.databaseUrl
     ? new pg_1.Pool({
         connectionString: env_config_1.envConfig.db.databaseUrl,
-        ssl: { rejectUnauthorized: false },
+        ssl: isProduction
+            ? { rejectUnauthorized: true } // Validar certificados en producción
+            : { rejectUnauthorized: false }, // Permitir en desarrollo (Neon, etc.)
     })
     : new pg_1.Pool({
         host: env_config_1.envConfig.db.host,

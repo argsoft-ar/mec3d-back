@@ -13,15 +13,17 @@ import {
   createProductSchema,
   updateProductSchema,
   partialUpdateProductSchema,
-} from "../schemas/diseno.schema";
+  uuidParamSchema,
+  listProductsSchema,
+} from "../schemas";
 
 const router = Router();
 
 // Obtener mis productos (protegido por auth)
 router.get("/mis-disenos", authenticateToken, getMyProducts);
 
-// Obtener todos los productos (público)
-router.get("/", getAllProducts);
+// Obtener todos los productos (público) - con paginación y orden por cercanía opcional
+router.get("/", validateSchema(listProductsSchema), getAllProducts);
 
 // Crear un producto (protegido por auth + Zod)
 router.post(
@@ -31,23 +33,30 @@ router.post(
   createProduct,
 );
 
-// Actualizar un producto completo (protegido por auth + Zod)
+// Actualizar un producto completo (protegido por auth + Zod + UUID)
 router.put(
   "/:id",
   authenticateToken,
+  validateSchema(uuidParamSchema),
   validateSchema(updateProductSchema),
   updateProduct,
 );
 
-// Actualización parcial de un producto (protegido por auth + Zod)
+// Actualización parcial de un producto (protegido por auth + Zod + UUID)
 router.patch(
   "/:id",
   authenticateToken,
+  validateSchema(uuidParamSchema),
   validateSchema(partialUpdateProductSchema),
   partialUpdateProduct,
 );
 
-// Eliminar un producto (protegido por auth)
-router.delete("/:id", authenticateToken, deleteProduct);
+// Eliminar un producto (protegido por auth + UUID)
+router.delete(
+  "/:id",
+  authenticateToken,
+  validateSchema(uuidParamSchema),
+  deleteProduct,
+);
 
 export default router;
