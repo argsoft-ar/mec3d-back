@@ -40,7 +40,11 @@ export const disenoRepository = {
   async getAllProductsPaginated(
     limit: number,
     offset: number,
-    zona?: { zonaId: number; provinciaPrefix: string | null; partidoPrefix: string | null },
+    zona?: {
+      zonaId: number;
+      provinciaPrefix: string | null;
+      partidoPrefix: string | null;
+    },
   ): Promise<{ rows: any[]; total: number }> {
     const countQuery = `SELECT COUNT(*) FROM disenos;`;
     const countResult = await pool.query(countQuery);
