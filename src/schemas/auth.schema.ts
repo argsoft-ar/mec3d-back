@@ -23,8 +23,12 @@ export const registerSchema = z.object({
       .number()
       .int()
       .positive("La zona debe ser un número entero positivo")
-      .max(99_999_999, "La zona debe ser un código INDEC válido (máx. 8 dígitos)")
+      .max(
+        99_999_999,
+        "La zona debe ser un código INDEC válido (máx. 8 dígitos)",
+      )
       .optional(),
+    georefLocalidadId: z.string().max(20).optional(),
   }),
 });
 

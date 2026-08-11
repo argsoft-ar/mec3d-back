@@ -26,3 +26,12 @@ export interface UserResponse {
   zonaId: number | null;
   cuentaMercadopago: string | null;
 }
+
+export interface UpdateProfileDTO {
+  tagline?: string;
+  descripcion?: string;
+  experiencia?: string;
+  zonaId?: number;
+  cuentaMercadopago?: string;
+  georefLocalidadId?: string;
+}

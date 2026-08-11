@@ -13,7 +13,7 @@ const SALT_ROUNDS = 10;
 
 export const authService = {
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    const { email, password, rolPrincipal, zonaId } = data;
+    const { email, password, rolPrincipal, zonaId, georefLocalidadId } = data;
     const normalizedEmail = email.trim().toLowerCase();
 
     // Verificar si el usuario ya existe
@@ -31,6 +31,7 @@ export const authService = {
       passwordHash,
       rolPrincipal,
       zonaId,
+      georefLocalidadId,
     });
 
     // Mapear respuesta de BD (snake_case) a camelCase

@@ -40,7 +40,7 @@ export const disenoRepository = {
   async getAllProductsPaginated(
     limit: number,
     offset: number,
-    zona?: { zonaId: number; provinciaPrefix: string | null },
+    zona?: { zonaId: number; provinciaPrefix: string | null; partidoPrefix: string | null },
   ): Promise<{ rows: any[]; total: number }> {
     const countQuery = `SELECT COUNT(*) FROM disenos;`;
     const countResult = await pool.query(countQuery);
@@ -52,13 +52,18 @@ export const disenoRepository = {
     const orderByZona = `
       ORDER BY
         CASE
-          WHEN u.zona_id = $3 THEN 0
           WHEN $4::text IS NOT NULL AND u.zona_id IS NOT NULL AND (
+            CASE
+              WHEN length(u.zona_id::text) = 8 THEN substring(u.zona_id::text, 1, 5)
+              WHEN length(u.zona_id::text) = 7 THEN '0' || substring(u.zona_id::text, 1, 4)
+            END
+          ) = $4::text THEN 0
+          WHEN $3::text IS NOT NULL AND u.zona_id IS NOT NULL AND (
             CASE
               WHEN length(u.zona_id::text) IN (8, 5) THEN substring(u.zona_id::text, 1, 2)
               WHEN length(u.zona_id::text) IN (7, 4) THEN '0' || substring(u.zona_id::text, 1, 1)
             END
-          ) = $4::text THEN 1
+          ) = $3::text THEN 1
           ELSE 2
         END,
         d.creado_en DESC
@@ -81,7 +86,7 @@ export const disenoRepository = {
     `;
     const values: (number | string | null)[] = [limit, offset];
     if (zona) {
-      values.push(zona.zonaId, zona.provinciaPrefix);
+      values.push(zona.provinciaPrefix, zona.partidoPrefix);
     }
     const result = await pool.query(query, values);
     return { rows: result.rows, total };
