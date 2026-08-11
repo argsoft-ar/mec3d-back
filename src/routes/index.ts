@@ -23,7 +23,14 @@ router.use("/archivos", uploadRoutes);
 // Rutas de datos geográficos (API Georef de Argentina)
 router.use("/georef", georefRoutes);
 
+<<<<<<< HEAD
 // Rutas de usuario (perfil, materiales)
 router.use("/usuarios", usuarioRoutes);
 
 export { router };
+=======
+// Rutas de perfil de usuario y fabricantes
+router.use("/usuarios", usuarioRoutes);
+
+export default router;
+>>>>>>> 66549a9bf38a3e718f7aec891172095d7258d563
