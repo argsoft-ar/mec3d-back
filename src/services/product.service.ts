@@ -10,7 +10,7 @@ import {
   PaginatedResponse,
 } from "../interfaces/pagination.interface";
 import { NotFoundError, ForbiddenError } from "../errors/app-error";
-import { getProvinciaPrefix } from "../utils/zona.util";
+import { getProvinciaPrefix, getPartidoPrefix } from "../utils/zona.util";
 
 /**
  * Mapea una fila de la BD (snake_case) a la interfaz Product (camelCase)
@@ -51,7 +51,11 @@ export const productService = {
 
     const zona =
       zonaId !== undefined
-        ? { zonaId, provinciaPrefix: getProvinciaPrefix(zonaId) }
+        ? {
+            zonaId,
+            provinciaPrefix: getProvinciaPrefix(zonaId),
+            partidoPrefix: getPartidoPrefix(zonaId),
+          }
         : undefined;
 
     const { rows, total } = await disenoRepository.getAllProductsPaginated(

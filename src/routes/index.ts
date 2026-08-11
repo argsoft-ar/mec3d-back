@@ -4,6 +4,7 @@ import authRoutes from "./auth.routes";
 import disenoRoutes from "./diseno.routes";
 import uploadRoutes from "./upload.routes";
 import georefRoutes from "./georef.routes";
+import usuarioRoutes from "./usuario.routes";
 
 const router = Router();
 
@@ -22,4 +23,7 @@ router.use("/archivos", uploadRoutes);
 // Rutas de datos geográficos (API Georef de Argentina)
 router.use("/georef", georefRoutes);
 
-export default router;
+// Rutas de usuario (perfil, materiales)
+router.use("/usuarios", usuarioRoutes);
+
+export { router };
