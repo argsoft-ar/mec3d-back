@@ -48,7 +48,7 @@ function mapUserRow(row: any) {
     email: row.email,
     rolPrincipal: row.rol_principal,
     zonaId: row.zona_id,
-    puntuacion: parseFloat(row.puntuacion) || 0,
+    puntuacion: Number.parseFloat(row.puntuacion) || 0,
     cuentaMercadopago: row.cuenta_mercadopago,
     tagline: row.tagline,
     descripcion: row.descripcion,

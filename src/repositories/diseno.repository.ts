@@ -48,7 +48,7 @@ export const disenoRepository = {
   ): Promise<{ rows: any[]; total: number }> {
     const countQuery = `SELECT COUNT(*) FROM disenos;`;
     const countResult = await pool.query(countQuery);
-    const total = parseInt(countResult.rows[0].count, 10);
+    const total = Number.parseInt(countResult.rows[0].count, 10);
 
     // Con zona: prioriza misma zona (0), misma provincia por prefijo INDEC (1) y el resto (2).
     // zona_id es INTEGER, por lo que los códigos de provincias 01-09 pierden el cero inicial:
