@@ -1,3 +1,3 @@
-// Aquí irán las funciones que contienen la lógica de negocio.
-// Ej: auth.service.ts, product.service.ts, etc.
-export {};
+export * from "./auth.service";
+export * from "./product.service";
+export * from "./upload.service";

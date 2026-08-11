@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paginationSchema } from "./pagination.schema";
 
 const specSchema = z.object({
   material: z.enum(["PLA", "PLA+", "PETG", "ABS", "TPU", "Nylon", "Resina"]),
@@ -30,5 +31,16 @@ export const updateProductSchema = z.object({ body: productBodySchema });
 export const partialUpdateProductSchema = z.object({
   body: productBodySchema.partial().extend({
     archivoUrl: z.string().url("El archivo URL debe ser válido").optional(),
+  }),
+});
+
+// Listado de productos: paginación + zonaId opcional (código INDEC) para ordenar por cercanía
+export const listProductsSchema = z.object({
+  query: paginationSchema.shape.query.extend({
+    zonaId: z
+      .string()
+      .regex(/^\d{1,8}$/, "zonaId debe ser un código INDEC numérico de hasta 8 dígitos")
+      .transform(Number)
+      .optional(),
   }),
 });

@@ -1,43 +1,33 @@
-import { Request, Response } from 'express';
-import cloudinary from '../config/cloudinary.config';
+import { Request, Response, NextFunction } from "express";
+import { uploadService } from "../services/upload.service";
+import { ValidationError } from "../errors/app-error";
+import { validateImageSignature } from "../middlewares/upload.middleware";
 
-export const uploadImage = async (req: Request, res: Response): Promise<void> => {
+export const uploadImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
-    // Verificar que el archivo venga en la request (gracias a Multer)
     if (!req.file) {
-      res.status(400).json({ error: 'No se ha enviado ninguna imagen' });
-      return;
+      throw new ValidationError("No se ha enviado ninguna imagen");
     }
 
-    // Subir desde el buffer de memoria a Cloudinary
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: 'mec3d/portadas', // Carpeta en tu Cloudinary
-        format: 'webp', // Convertir a webp para optimización
-        transformation: [
-          { width: 800, height: 600, crop: 'limit' } // Redimensionar si es muy grande
-        ]
-      },
-      (error, result) => {
-        if (error) {
-          console.error('❌ Error de Cloudinary:', error);
-          res.status(500).json({ error: 'Error al subir la imagen a la nube' });
-          return;
-        }
+    // Validar magic number del archivo (segunda capa de seguridad)
+    if (!validateImageSignature(req.file.buffer)) {
+      throw new ValidationError("El archivo no es una imagen válida");
+    }
 
-        // Éxito: Devolvemos la URL segura
-        res.status(200).json({
-          message: 'Imagen subida exitosamente',
-          url: result?.secure_url
-        });
-      }
+    const url = await uploadService.uploadImage(
+      req.file.buffer,
+      req.file.originalname,
     );
 
-    // Escribir el buffer en el stream de subida
-    uploadStream.end(req.file.buffer);
-
+    res.status(200).json({
+      message: "Imagen subida exitosamente",
+      url,
+    });
   } catch (error) {
-    console.error('❌ Error en el controlador de subida:', error);
-    res.status(500).json({ error: 'Error interno al procesar la imagen' });
+    next(error);
   }
 };

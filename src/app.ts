@@ -1,10 +1,13 @@
 import express, { Application } from "express";
 import cors from "cors";
 import helmet from "helmet";
-
-import router from "./routes";
+import swaggerUi from "swagger-ui-express";
+import "./types/express";
+import { router } from "./routes";
 import { envConfig } from "./config/env.config";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
+import { apiLimiter } from "./middlewares/rate-limit.middleware";
+import { swaggerSpec } from "./docs/swagger.config";
 
 // Inicializar Express
 const app: Application = express();
@@ -25,6 +28,12 @@ app.use(
 );
 app.use(express.json()); // Parsea requests entrantes con payloads JSON
 app.use(express.urlencoded({ extended: true })); // Parsea payloads URL-encoded
+
+// Rate limiting global
+app.use("/api/v1", apiLimiter);
+
+// Documentación Swagger
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Rutas base de la API
 app.use("/api/v1", router);
