@@ -79,7 +79,10 @@ export const disenoRepository = {
         d.creado_en DESC
     `;
 
-    const categoriaParamIndex = categoria ? (zona ? 5 : 3) : null;
+    let categoriaParamIndex: number | null = null;
+    if (categoria) {
+      categoriaParamIndex = zona ? 5 : 3;
+    }
 
     const query = `
       SELECT 

@@ -26,7 +26,7 @@ export const usuarioService = {
 
   async setMateriales(userId: string, materiales: string[]) {
     const user = await userRepository.findById(userId);
-    if (!user || user.rol_principal !== "fabricante")
+    if (user?.rol_principal !== "fabricante")
       throw new ForbiddenError(
         "Solo los fabricantes pueden configurar materiales",
       );
@@ -56,7 +56,7 @@ export const usuarioService = {
     tecnologias: string[],
   ): Promise<Tecnologia[]> {
     const user = await userRepository.findById(userId);
-    if (!user || user.rol_principal !== "fabricante")
+    if (user?.rol_principal !== "fabricante")
       throw new ForbiddenError(
         "Solo los fabricantes pueden configurar tecnologías",
       );
