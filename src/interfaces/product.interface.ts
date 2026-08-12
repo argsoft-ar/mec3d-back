@@ -29,6 +29,7 @@ export interface Product {
   price: number;
   format: string;
   categoria?: string;
+  archivoUrl?: string;
   specs: ProductSpecificaciones | null;
   designer: ProductDesigner;
 }

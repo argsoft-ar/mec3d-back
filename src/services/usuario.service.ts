@@ -1,5 +1,5 @@
 import { userRepository } from "../repositories/user.repository";
-import { UpdateProfileDTO } from "../interfaces/user.interface";
+import { Tecnologia, UpdateProfileDTO } from "../interfaces/user.interface";
 import { NotFoundError, ForbiddenError } from "../errors/app-error";
 import { getProvinciaPrefix } from "../utils/zona.util";
 
@@ -11,7 +11,11 @@ export const usuarioService = {
       user.rol_principal === "fabricante"
         ? await userRepository.getMaterialesFabricante(userId)
         : [];
-    return { ...mapUserRow(user), materiales };
+    const tecnologias =
+      user.rol_principal === "fabricante"
+        ? await userRepository.getTecnologiasFabricante(userId)
+        : [];
+    return { ...mapUserRow(user), materiales, tecnologias };
   },
 
   async updateProfile(userId: string, data: UpdateProfileDTO) {
@@ -20,12 +24,9 @@ export const usuarioService = {
     return mapUserRow(updated);
   },
 
-  async setMateriales(
-    userId: string,
-    rolPrincipal: string,
-    materiales: string[],
-  ) {
-    if (rolPrincipal !== "fabricante")
+  async setMateriales(userId: string, materiales: string[]) {
+    const user = await userRepository.findById(userId);
+    if (user?.rol_principal !== "fabricante")
       throw new ForbiddenError(
         "Solo los fabricantes pueden configurar materiales",
       );
@@ -39,6 +40,28 @@ export const usuarioService = {
       zonaId ?? null,
       provinciaPrefix,
     );
+  },
+
+  async changeRol(userId: string, rol: string): Promise<any> {
+    const result = await userRepository.updateRol(userId, rol);
+    if (!result) throw new NotFoundError("Usuario no encontrado");
+    if (rol !== "fabricante") {
+      await userRepository.clearFabricanteRows(userId);
+    }
+    return result;
+  },
+
+  async setTecnologias(
+    userId: string,
+    tecnologias: string[],
+  ): Promise<Tecnologia[]> {
+    const user = await userRepository.findById(userId);
+    if (user?.rol_principal !== "fabricante")
+      throw new ForbiddenError(
+        "Solo los fabricantes pueden configurar tecnologías",
+      );
+    await userRepository.setTecnologiasFabricante(userId, tecnologias);
+    return userRepository.getTecnologiasFabricante(userId);
   },
 };
 
@@ -54,5 +77,6 @@ function mapUserRow(row: any) {
     descripcion: row.descripcion,
     experiencia: row.experiencia,
     actualizadoEn: row.actualizado_en,
+    georefLocalidadId: row.georef_localidad_id,
   };
 }
