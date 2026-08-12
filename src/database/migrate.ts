@@ -22,6 +22,28 @@ const migrate = async () => {
         REFERENCES usuarios(id) ON DELETE CASCADE,
       CONSTRAINT uq_fabricante_material UNIQUE (fabricante_id, material)
     );
+
+    -- fabricante_tecnologias: create if missing
+    CREATE TABLE IF NOT EXISTS fabricante_tecnologias (
+      id            SERIAL PRIMARY KEY,
+      fabricante_id UUID         NOT NULL,
+      tecnologia    VARCHAR(100) NOT NULL,
+      disponible    BOOLEAN      DEFAULT true,
+      creado_en     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_fabricante_tec FOREIGN KEY (fabricante_id)
+        REFERENCES usuarios(id) ON DELETE CASCADE,
+      CONSTRAINT uq_fabricante_tecnologia UNIQUE (fabricante_id, tecnologia)
+    );
+
+    -- seed standard categories if missing
+    INSERT INTO categorias (nombre, descripcion) VALUES
+      ('Autos',       'Piezas y repuestos para automóviles'),
+      ('Motos',       'Componentes y accesorios para motos'),
+      ('Barcos',      'Partes náuticas y marinas'),
+      ('Casa',        'Herrajes, cerraduras y más'),
+      ('Maquinas',    'Piezas industriales y de producción'),
+      ('Engranajes',  'Transmisiones, poleas y sistemas mecánicos')
+    ON CONFLICT (nombre) DO NOTHING;
   `;
 
   try {
