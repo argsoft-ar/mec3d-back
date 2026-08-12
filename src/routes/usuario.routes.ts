@@ -7,11 +7,16 @@ import {
   setMisMateriales,
   getFabricantesCercanos,
   getFabricanteById,
+  changeMyRol,
+  deleteFabricanteStatus,
+  setMisTecnologias,
 } from "../controllers/usuario.controller";
 import {
   updateProfileSchema,
   setMaterialesSchema,
   getFabricantesSchema,
+  changeRolSchema,
+  setTecnologiasSchema,
 } from "../schemas/usuario.schema";
 
 const router = Router();
@@ -35,5 +40,18 @@ router.get(
   getFabricantesCercanos,
 );
 router.get("/fabricantes/:id", getFabricanteById);
+router.patch(
+  "/rol",
+  authenticateToken,
+  validateSchema(changeRolSchema),
+  changeMyRol,
+);
+router.delete("/fabricante", authenticateToken, deleteFabricanteStatus);
+router.put(
+  "/tecnologias",
+  authenticateToken,
+  validateSchema(setTecnologiasSchema),
+  setMisTecnologias,
+);
 
 export default router;

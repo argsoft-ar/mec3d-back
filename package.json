@@ -13,6 +13,7 @@
     "db:migrate": "ts-node src/database/migrate.ts",
     "db:init": "ts-node src/database/init.ts",
     "db:seed": "ts-node src/database/seed.ts",
+    "db:truncate": "ts-node src/database/truncate.ts",
     "db:reset": "npm run db:init && npm run db:seed",
     "seed": "ts-node src/database/seed.ts"
   },

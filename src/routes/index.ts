@@ -5,6 +5,7 @@ import disenoRoutes from "./diseno.routes";
 import uploadRoutes from "./upload.routes";
 import georefRoutes from "./georef.routes";
 import usuarioRoutes from "./usuario.routes";
+import catalogoRoutes from "./catalogo.routes";
 
 const router = Router();
 
@@ -25,5 +26,8 @@ router.use("/georef", georefRoutes);
 
 // Rutas de usuario (perfil, materiales)
 router.use("/usuarios", usuarioRoutes);
+
+// Rutas de catálogo (materiales y tecnologías disponibles)
+router.use("/catalogos", catalogoRoutes);
 
 export { router };
