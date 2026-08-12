@@ -14,9 +14,8 @@ export const getAllProducts = async (
     };
 
     const zonaId = req.query.zonaId ? Number(req.query.zonaId) : undefined;
-    const categoria = typeof req.query.categoria === "string"
-      ? req.query.categoria
-      : undefined;
+    const categoria =
+      typeof req.query.categoria === "string" ? req.query.categoria : undefined;
 
     const result = await productService.getAll(pagination, zonaId, categoria);
     res.status(200).json(result);
