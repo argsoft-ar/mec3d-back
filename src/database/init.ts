@@ -6,6 +6,7 @@ const createTables = async () => {
     DROP TABLE IF EXISTS productos_fisicos CASCADE;
     DROP TABLE IF EXISTS disenos CASCADE;
     DROP TABLE IF EXISTS categorias CASCADE;
+    DROP TABLE IF EXISTS fabricante_tecnologias CASCADE;
     DROP TABLE IF EXISTS fabricante_materiales CASCADE;
     DROP TABLE IF EXISTS usuarios CASCADE;
     
@@ -46,6 +47,16 @@ const createTables = async () => {
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT fk_fabricante_mat FOREIGN KEY (fabricante_id) REFERENCES usuarios(id) ON DELETE CASCADE,
         CONSTRAINT uq_fabricante_material UNIQUE (fabricante_id, material)
+    );
+
+    CREATE TABLE fabricante_tecnologias (
+        id SERIAL PRIMARY KEY,
+        fabricante_id UUID NOT NULL,
+        tecnologia VARCHAR(100) NOT NULL,
+        disponible BOOLEAN DEFAULT true,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_fabricante_tec FOREIGN KEY (fabricante_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        CONSTRAINT uq_fabricante_tecnologia UNIQUE (fabricante_id, tecnologia)
     );
 
     CREATE TABLE categorias (

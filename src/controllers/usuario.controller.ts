@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { usuarioService } from "../services/usuario.service";
 import { UpdateProfileDTO } from "../interfaces/user.interface";
+import { generateToken } from "../utils/jwt.util";
+import type { TokenPayload } from "../interfaces/auth.interface";
 
 export const getMyProfile = async (
   req: Request,
@@ -36,11 +38,7 @@ export const setMisMateriales = async (
 ): Promise<void> => {
   try {
     const { materiales } = req.body as { materiales: string[] };
-    const result = await usuarioService.setMateriales(
-      req.user!.id,
-      req.user!.rolPrincipal,
-      materiales,
-    );
+    const result = await usuarioService.setMateriales(req.user!.id, materiales);
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -71,6 +69,56 @@ export const getFabricanteById = async (
   try {
     const profile = await usuarioService.getProfile(req.params.id);
     res.status(200).json(profile);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const changeMyRol = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { rol } = req.body as { rol: string };
+    const result = await usuarioService.changeRol(req.user!.id, rol);
+    const payload: TokenPayload = {
+      id: req.user!.id,
+      email: req.user!.email,
+      rolPrincipal: rol as TokenPayload["rolPrincipal"],
+    };
+    const token = generateToken(payload);
+    res.status(200).json({ ...result, token });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteFabricanteStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    await usuarioService.changeRol(req.user!.id, "comprador");
+    res.status(200).json({ message: "Estado de fabricante eliminado" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const setMisTecnologias = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { tecnologias } = req.body as { tecnologias: string[] };
+    const result = await usuarioService.setTecnologias(
+      req.user!.id,
+      tecnologias,
+    );
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

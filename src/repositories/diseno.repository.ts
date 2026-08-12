@@ -22,7 +22,7 @@ export const disenoRepository = {
   async getAllProducts() {
     const query = `
       SELECT 
-        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.archivo_url, d.rating, 
         d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
@@ -45,9 +45,15 @@ export const disenoRepository = {
       provinciaPrefix: string | null;
       partidoPrefix: string | null;
     },
+    categoria?: string,
   ): Promise<{ rows: any[]; total: number }> {
-    const countQuery = `SELECT COUNT(*) FROM disenos;`;
-    const countResult = await pool.query(countQuery);
+    const countQuery = categoria
+      ? `SELECT COUNT(*) FROM disenos d LEFT JOIN categorias c ON d.categoria_id = c.id WHERE c.nombre = $1`
+      : `SELECT COUNT(*) FROM disenos;`;
+    const countResult = await pool.query(
+      countQuery,
+      categoria ? [categoria] : [],
+    );
     const total = Number.parseInt(countResult.rows[0].count, 10);
 
     // Con zona: prioriza misma zona (0), misma provincia por prefijo INDEC (1) y el resto (2).
@@ -73,9 +79,11 @@ export const disenoRepository = {
         d.creado_en DESC
     `;
 
+    const categoriaParamIndex = categoria ? (zona ? 5 : 3) : null;
+
     const query = `
       SELECT 
-        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.archivo_url, d.rating, 
         d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
@@ -85,12 +93,16 @@ export const disenoRepository = {
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
       LEFT JOIN categorias c ON d.categoria_id = c.id
+      ${categoriaParamIndex !== null ? `WHERE c.nombre = $${categoriaParamIndex}` : ""}
       ${zona ? orderByZona : "ORDER BY d.creado_en DESC"}
       LIMIT $1 OFFSET $2;
     `;
     const values: (number | string | null)[] = [limit, offset];
     if (zona) {
       values.push(zona.provinciaPrefix, zona.partidoPrefix);
+    }
+    if (categoria) {
+      values.push(categoria);
     }
     const result = await pool.query(query, values);
     return { rows: result.rows, total };
@@ -99,7 +111,7 @@ export const disenoRepository = {
   async getByIdWithDesigner(id: string) {
     const query = `
       SELECT 
-        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.archivo_url, d.rating, 
         d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
         d.disenador_id,
         u.id AS designer_id,
@@ -129,6 +141,10 @@ export const disenoRepository = {
   }) {
     let categoriaId: number | null = null;
     if (productData.categoria) {
+      await pool.query(
+        `INSERT INTO categorias (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING`,
+        [productData.categoria],
+      );
       const catResult = await pool.query<{ id: number }>(
         `SELECT id FROM categorias WHERE nombre = $1`,
         [productData.categoria],
@@ -175,6 +191,10 @@ export const disenoRepository = {
   ) {
     let categoriaId: number | null = null;
     if (productData.categoria) {
+      await pool.query(
+        `INSERT INTO categorias (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING`,
+        [productData.categoria],
+      );
       const catResult = await pool.query<{ id: number }>(
         `SELECT id FROM categorias WHERE nombre = $1`,
         [productData.categoria],
@@ -213,6 +233,10 @@ export const disenoRepository = {
     let categoriaId: number | null | undefined = undefined;
     if ("categoria" in updates) {
       if (updates.categoria) {
+        await pool.query(
+          `INSERT INTO categorias (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING`,
+          [updates.categoria],
+        );
         const catResult = await pool.query<{ id: number }>(
           `SELECT id FROM categorias WHERE nombre = $1`,
           [updates.categoria],
@@ -269,7 +293,7 @@ export const disenoRepository = {
   async getByDesigner(designerId: string) {
     const query = `
       SELECT 
-        d.id, d.titulo, d.descripcion, d.imagen_url, d.rating, 
+        d.id, d.titulo, d.descripcion, d.imagen_url, d.archivo_url, d.rating, 
         d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
