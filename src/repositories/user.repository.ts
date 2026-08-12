@@ -1,5 +1,9 @@
 import pool from "../config/db.config";
-import { Material, UpdateProfileDTO } from "../interfaces/user.interface";
+import {
+  Material,
+  Tecnologia,
+  UpdateProfileDTO,
+} from "../interfaces/user.interface";
 
 export const userRepository = {
   async findByEmail(email: string) {
@@ -40,7 +44,8 @@ export const userRepository = {
   async findById(id: string) {
     const query = `
       SELECT id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
-             tagline, descripcion, experiencia, creado_en, actualizado_en
+             tagline, descripcion, experiencia, creado_en, actualizado_en,
+             georef_localidad_id
       FROM usuarios
       WHERE id = $1;
     `;
@@ -88,7 +93,7 @@ export const userRepository = {
       SET ${fields.join(", ")}
       WHERE id = $${idx}
       RETURNING id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
-                tagline, descripcion, experiencia, actualizado_en;
+                tagline, descripcion, experiencia, actualizado_en, georef_localidad_id;
     `;
     const result = await pool.query(query, values);
     return result.rows[0] || null;
@@ -166,5 +171,77 @@ export const userRepository = {
     `;
     const result = await pool.query(query, [zonaId, provinciaPrefix]);
     return result.rows;
+  },
+
+  async updateRol(userId: string, rol: string): Promise<any> {
+    const query = `
+      UPDATE usuarios
+      SET rol_principal = $2, actualizado_en = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING id, email, rol_principal;
+    `;
+    const result = await pool.query(query, [userId, rol]);
+    return result.rows[0] || null;
+  },
+
+  async clearFabricanteRows(userId: string): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "DELETE FROM fabricante_materiales WHERE fabricante_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM fabricante_tecnologias WHERE fabricante_id = $1",
+        [userId],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async getTecnologiasFabricante(fabricanteId: string): Promise<Tecnologia[]> {
+    const query = `
+      SELECT id, tecnologia, disponible
+      FROM fabricante_tecnologias
+      WHERE fabricante_id = $1
+      ORDER BY tecnologia;
+    `;
+    const result = await pool.query(query, [fabricanteId]);
+    return result.rows;
+  },
+
+  async setTecnologiasFabricante(
+    fabricanteId: string,
+    tecnologias: string[],
+  ): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "DELETE FROM fabricante_tecnologias WHERE fabricante_id = $1",
+        [fabricanteId],
+      );
+      if (tecnologias.length > 0) {
+        const placeholders = tecnologias
+          .map((_, i) => `($1, $${i + 2})`)
+          .join(", ");
+        await client.query(
+          `INSERT INTO fabricante_tecnologias (fabricante_id, tecnologia) VALUES ${placeholders}`,
+          [fabricanteId, ...tecnologias],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 };

@@ -31,6 +31,7 @@ function mapRowToProduct(row: any): Product {
     price: Number.parseFloat(row.precio_base) || 0,
     format: row.formato || "STL",
     categoria: row.categoria_nombre || undefined,
+    archivoUrl: row.archivo_url || undefined,
     specs: row.especificaciones || null,
     designer: {
       name,
@@ -45,6 +46,7 @@ export const productService = {
   async getAll(
     pagination: PaginationParams,
     zonaId?: number,
+    categoria?: string,
   ): Promise<PaginatedResponse<Product>> {
     const { page, limit } = pagination;
     const offset = (page - 1) * limit;
@@ -62,6 +64,7 @@ export const productService = {
       limit,
       offset,
       zona,
+      categoria,
     );
     const products = rows.map(mapRowToProduct);
 
