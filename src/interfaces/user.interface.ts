@@ -35,6 +35,12 @@ export interface Material {
   disponible: boolean;
 }
 
+export interface Tecnologia {
+  id: number;
+  tecnologia: string;
+  disponible: boolean;
+}
+
 export interface UpdateProfileDTO {
   tagline?: string;
   descripcion?: string;
@@ -53,4 +59,5 @@ export interface FabricantePublico {
   descripcion: string | null;
   experiencia: string | null;
   materiales: Material[];
+  tecnologias: Tecnologia[];
 }

@@ -24,3 +24,21 @@ export const getFabricantesSchema = z.object({
     zonaId: z.string().regex(/^\d+$/, "zonaId debe ser numérico").optional(),
   }),
 });
+
+export const changeRolSchema = z.object({
+  body: z.object({
+    rol: z.enum(["comprador", "disenador", "fabricante"], {
+      errorMap: () => ({
+        message: "Rol debe ser comprador, disenador o fabricante",
+      }),
+    }),
+  }),
+});
+
+export const setTecnologiasSchema = z.object({
+  body: z.object({
+    tecnologias: z
+      .array(z.string().min(1).max(100))
+      .max(20, "No se pueden registrar más de 20 tecnologías"),
+  }),
+});
