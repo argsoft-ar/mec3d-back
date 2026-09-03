@@ -1,6 +1,6 @@
 import { userRepository } from "../repositories/user.repository";
 import { Tecnologia, UpdateProfileDTO } from "../interfaces/user.interface";
-import { NotFoundError, ForbiddenError } from "../errors/app-error";
+import { NotFoundError, ForbiddenError, ConflictError } from "../errors/app-error";
 import { getProvinciaPrefix } from "../utils/zona.util";
 
 export const usuarioService = {
@@ -19,6 +19,13 @@ export const usuarioService = {
   },
 
   async updateProfile(userId: string, data: UpdateProfileDTO) {
+    if (data.username !== undefined) {
+      const taken = await userRepository.isUsernameTaken(
+        data.username,
+        userId,
+      );
+      if (taken) throw new ConflictError("El nombre de usuario ya está en uso");
+    }
     const updated = await userRepository.updateProfile(userId, data);
     if (!updated) throw new NotFoundError("Usuario no encontrado");
     return mapUserRow(updated);
@@ -63,6 +70,17 @@ export const usuarioService = {
     await userRepository.setTecnologiasFabricante(userId, tecnologias);
     return userRepository.getTecnologiasFabricante(userId);
   },
+
+  async checkUsernameDisponible(
+    username: string,
+    currentUserId?: string,
+  ): Promise<{ disponible: boolean }> {
+    const taken = await userRepository.isUsernameTaken(
+      username,
+      currentUserId,
+    );
+    return { disponible: !taken };
+  },
 };
 
 function mapUserRow(row: any) {
@@ -78,5 +96,8 @@ function mapUserRow(row: any) {
     experiencia: row.experiencia,
     actualizadoEn: row.actualizado_en,
     georefLocalidadId: row.georef_localidad_id,
+    username: row.username,
+    telefono: row.telefono,
+    direccion: row.direccion,
   };
 }
