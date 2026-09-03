@@ -1,6 +1,10 @@
 import { userRepository } from "../repositories/user.repository";
 import { Tecnologia, UpdateProfileDTO } from "../interfaces/user.interface";
-import { NotFoundError, ForbiddenError, ConflictError } from "../errors/app-error";
+import {
+  NotFoundError,
+  ForbiddenError,
+  ConflictError,
+} from "../errors/app-error";
 import { getProvinciaPrefix } from "../utils/zona.util";
 
 export const usuarioService = {
@@ -20,10 +24,7 @@ export const usuarioService = {
 
   async updateProfile(userId: string, data: UpdateProfileDTO) {
     if (data.username !== undefined) {
-      const taken = await userRepository.isUsernameTaken(
-        data.username,
-        userId,
-      );
+      const taken = await userRepository.isUsernameTaken(data.username, userId);
       if (taken) throw new ConflictError("El nombre de usuario ya está en uso");
     }
     const updated = await userRepository.updateProfile(userId, data);
@@ -75,10 +76,7 @@ export const usuarioService = {
     username: string,
     currentUserId?: string,
   ): Promise<{ disponible: boolean }> {
-    const taken = await userRepository.isUsernameTaken(
-      username,
-      currentUserId,
-    );
+    const taken = await userRepository.isUsernameTaken(username, currentUserId);
     return { disponible: !taken };
   },
 };
