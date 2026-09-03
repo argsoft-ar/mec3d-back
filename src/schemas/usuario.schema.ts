@@ -7,6 +7,24 @@ export const updateProfileSchema = z.object({
     experiencia: z.string().max(2000).optional(),
     zonaId: z.number().int().positive().max(99_999_999).optional(),
     cuentaMercadopago: z.string().max(255).optional(),
+    username: z
+      .string()
+      .min(3)
+      .max(30)
+      .regex(/^[a-zA-Z0-9_]+$/, "Solo letras, números y guion bajo")
+      .optional(),
+    telefono: z.string().max(30).optional(),
+    direccion: z.string().max(255).optional(),
+  }),
+});
+
+export const checkUsernameSchema = z.object({
+  query: z.object({
+    username: z
+      .string()
+      .min(3)
+      .max(30)
+      .regex(/^[a-zA-Z0-9_]+$/, "Solo letras, números y guion bajo"),
   }),
 });
 

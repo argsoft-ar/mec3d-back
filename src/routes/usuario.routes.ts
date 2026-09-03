@@ -10,6 +10,7 @@ import {
   changeMyRol,
   deleteFabricanteStatus,
   setMisTecnologias,
+  checkUsername,
 } from "../controllers/usuario.controller";
 import {
   updateProfileSchema,
@@ -17,6 +18,7 @@ import {
   getFabricantesSchema,
   changeRolSchema,
   setTecnologiasSchema,
+  checkUsernameSchema,
 } from "../schemas/usuario.schema";
 
 const router = Router();
@@ -27,6 +29,12 @@ router.put(
   authenticateToken,
   validateSchema(updateProfileSchema),
   updateMyProfile,
+);
+router.get(
+  "/username-disponible",
+  authenticateToken,
+  validateSchema(checkUsernameSchema),
+  checkUsername,
 );
 router.put(
   "/materiales",

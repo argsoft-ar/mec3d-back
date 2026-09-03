@@ -123,3 +123,20 @@ export const setMisTecnologias = async (
     next(error);
   }
 };
+
+export const checkUsername = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const username = req.query.username as string;
+    const result = await usuarioService.checkUsernameDisponible(
+      username,
+      req.user?.id,
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};

@@ -35,6 +35,9 @@ const createTables = async () => {
         tagline VARCHAR(255),
         descripcion TEXT,
         experiencia TEXT,
+        username VARCHAR(30) UNIQUE,
+        telefono VARCHAR(30),
+        direccion VARCHAR(255),
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
