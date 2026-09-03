@@ -11,7 +11,7 @@ export const updateProfileSchema = z.object({
       .string()
       .min(3)
       .max(30)
-      .regex(/^[a-zA-Z0-9_]+$/, "Solo letras, números y guion bajo")
+      .regex(/^\w+$/, "Solo letras, números y guion bajo")
       .optional(),
     telefono: z.string().max(30).optional(),
     direccion: z.string().max(255).optional(),
@@ -24,7 +24,7 @@ export const checkUsernameSchema = z.object({
       .string()
       .min(3)
       .max(30)
-      .regex(/^[a-zA-Z0-9_]+$/, "Solo letras, números y guion bajo"),
+      .regex(/^\w+$/, "Solo letras, números y guion bajo"),
   }),
 });
 
