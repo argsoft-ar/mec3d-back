@@ -10,6 +10,9 @@ const migrate = async () => {
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS experiencia      TEXT;
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS actualizado_en   TIMESTAMP     DEFAULT CURRENT_TIMESTAMP;
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS georef_localidad_id VARCHAR(20);
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS username         VARCHAR(30)   UNIQUE;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono         VARCHAR(30);
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS direccion        VARCHAR(255);
 
     -- fabricante_materiales: create if missing
     CREATE TABLE IF NOT EXISTS fabricante_materiales (

@@ -10,6 +10,9 @@ export interface User {
   tagline: string | null;
   descripcion: string | null;
   experiencia: string | null;
+  username: string | null;
+  telefono: string | null;
+  direccion: string | null;
   creadoEn: string;
   actualizadoEn: string;
 }
@@ -48,6 +51,9 @@ export interface UpdateProfileDTO {
   zonaId?: number;
   cuentaMercadopago?: string;
   georefLocalidadId?: string;
+  username?: string;
+  telefono?: string;
+  direccion?: string;
 }
 
 export interface FabricantePublico {
