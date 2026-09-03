@@ -45,7 +45,7 @@ export const userRepository = {
     const query = `
       SELECT id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
              tagline, descripcion, experiencia, creado_en, actualizado_en,
-             georef_localidad_id
+             georef_localidad_id, username, telefono, direccion
       FROM usuarios
       WHERE id = $1;
     `;
@@ -82,6 +82,18 @@ export const userRepository = {
       fields.push(`georef_localidad_id = $${idx++}`);
       values.push(data.georefLocalidadId);
     }
+    if (data.username !== undefined) {
+      fields.push(`username = $${idx++}`);
+      values.push(data.username);
+    }
+    if (data.telefono !== undefined) {
+      fields.push(`telefono = $${idx++}`);
+      values.push(data.telefono);
+    }
+    if (data.direccion !== undefined) {
+      fields.push(`direccion = $${idx++}`);
+      values.push(data.direccion);
+    }
 
     if (fields.length === 0) return this.findById(id);
 
@@ -93,10 +105,23 @@ export const userRepository = {
       SET ${fields.join(", ")}
       WHERE id = $${idx}
       RETURNING id, email, rol_principal, zona_id, puntuacion, cuenta_mercadopago,
-                tagline, descripcion, experiencia, actualizado_en, georef_localidad_id;
+                tagline, descripcion, experiencia, actualizado_en, georef_localidad_id,
+                username, telefono, direccion;
     `;
     const result = await pool.query(query, values);
     return result.rows[0] || null;
+  },
+
+  async isUsernameTaken(
+    username: string,
+    excludeUserId?: string,
+  ): Promise<boolean> {
+    const query = excludeUserId
+      ? `SELECT 1 FROM usuarios WHERE username = $1 AND id != $2 LIMIT 1;`
+      : `SELECT 1 FROM usuarios WHERE username = $1 LIMIT 1;`;
+    const values = excludeUserId ? [username, excludeUserId] : [username];
+    const result = await pool.query(query, values);
+    return (result.rowCount ?? 0) > 0;
   },
 
   async getMaterialesFabricante(fabricanteId: string): Promise<Material[]> {
