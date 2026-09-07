@@ -1,5 +1,5 @@
 import multer from "multer";
-import path from "path";
+import path from "node:path";
 import { ValidationError } from "../errors/app-error";
 
 const storage = multer.memoryStorage();
@@ -41,12 +41,14 @@ export const uploadImageMiddleware = multer({
   storage,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5 MB
+    files: 1,
+    fields: 5,
   },
   fileFilter,
 });
 
 // Extensiones válidas de archivos de diseño 3D
-const MODEL_EXTENSIONS = [".stl", ".3mf", ".obj", ".step", ".stp"];
+const MODEL_EXTENSIONS = new Set([".stl", ".3mf", ".obj", ".step", ".stp"]);
 
 // Magic numbers para los formatos de modelo 3D que sí tienen firma binaria confiable
 const MODEL_SIGNATURES: Record<string, string> = {
@@ -86,7 +88,7 @@ export const validateModelSignature = (
   }
 
   const ext = path.extname(originalname).toLowerCase();
-  if (!MODEL_EXTENSIONS.includes(ext)) {
+  if (!MODEL_EXTENSIONS.has(ext)) {
     return false;
   }
 
@@ -125,7 +127,7 @@ const modelFileFilter = (
     "model/step",
   ];
 
-  if (MODEL_EXTENSIONS.includes(ext) && allowedMimes.includes(file.mimetype)) {
+  if (MODEL_EXTENSIONS.has(ext) && allowedMimes.includes(file.mimetype)) {
     cb(null, true);
   } else {
     cb(
@@ -140,6 +142,8 @@ export const uploadModelMiddleware = multer({
   storage,
   limits: {
     fileSize: 100 * 1024 * 1024, // 100 MB
+    files: 1,
+    fields: 5,
   },
   fileFilter: modelFileFilter,
 });

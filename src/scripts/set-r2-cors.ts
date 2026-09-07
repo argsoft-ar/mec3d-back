@@ -2,10 +2,18 @@ import { PutBucketCorsCommand } from "@aws-sdk/client-s3";
 import r2Client from "../config/r2.config";
 import { envConfig } from "../config/env.config";
 
+function stripTrailingSlashes(s: string): string {
+  let result = s;
+  while (result.endsWith("/")) {
+    result = result.slice(0, -1);
+  }
+  return result;
+}
+
 // Misma lógica de parseo de orígenes que usa src/app.ts para el middleware de cors()
 const allowedOrigins = envConfig.cors.origin
   .split(",")
-  .map((o) => o.trim().replace(/\/+$/, ""));
+  .map((o) => stripTrailingSlashes(o.trim()));
 
 async function setR2Cors(): Promise<void> {
   const bucketName = envConfig.r2.bucketName;
@@ -16,7 +24,7 @@ async function setR2Cors(): Promise<void> {
     );
   }
 
-  if (allowedOrigins.length === 0 || allowedOrigins.every((o) => !o)) {
+  if (allowedOrigins.every((o) => !o)) {
     throw new Error(
       "CORS_ORIGIN no está definido o no contiene orígenes válidos.",
     );

@@ -1,5 +1,5 @@
-import { randomUUID } from "crypto";
-import path from "path";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import cloudinary from "../config/cloudinary.config";
 import r2Client from "../config/r2.config";
@@ -73,7 +73,10 @@ export const uploadService = {
       throw new AppError("Error al subir el archivo 3D a la nube", 500);
     }
 
-    const base = (envConfig.r2.publicUrl || "").replace(/\/+$/, "");
+    let base = envConfig.r2.publicUrl || "";
+    while (base.endsWith("/")) {
+      base = base.slice(0, -1);
+    }
     return `${base}/${key}`;
   },
 };
