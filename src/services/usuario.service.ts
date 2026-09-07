@@ -22,6 +22,31 @@ export const usuarioService = {
     return { ...mapUserRow(user), materiales, tecnologias };
   },
 
+  // Perfil público de un fabricante (endpoint sin auth): expone únicamente datos de
+  // negocio, nunca PII (email, teléfono, dirección, cuenta de Mercado Pago). Solo
+  // aplica a cuentas con rol "fabricante"; para cualquier otro usuario responde 404
+  // en vez de confirmar su existencia (evita enumeración de cuentas no-fabricante).
+  async getPublicFabricanteProfile(userId: string) {
+    const user = await userRepository.findById(userId);
+    if (!user || user.rol_principal !== "fabricante") {
+      throw new NotFoundError("Fabricante no encontrado");
+    }
+    const materiales = await userRepository.getMaterialesFabricante(userId);
+    const tecnologias = await userRepository.getTecnologiasFabricante(userId);
+    return {
+      id: user.id,
+      username: user.username,
+      rolPrincipal: user.rol_principal,
+      zonaId: user.zona_id,
+      puntuacion: Number.parseFloat(user.puntuacion) || 0,
+      tagline: user.tagline,
+      descripcion: user.descripcion,
+      experiencia: user.experiencia,
+      materiales,
+      tecnologias,
+    };
+  },
+
   async updateProfile(userId: string, data: UpdateProfileDTO) {
     if (data.username !== undefined) {
       const taken = await userRepository.isUsernameTaken(data.username, userId);

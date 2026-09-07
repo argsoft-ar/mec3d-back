@@ -15,12 +15,13 @@ const JWT_EXPIRES_IN = envConfig.jwt.expiresIn || "1d";
 export const generateToken = (payload: TokenPayload): string => {
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"],
+    algorithm: "HS256",
   });
 };
 
 export const verifyToken = (token: string): TokenPayload | null => {
   try {
-    return jwt.verify(token, JWT_SECRET) as TokenPayload;
+    return jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as TokenPayload;
   } catch (error) {
     return null;
   }

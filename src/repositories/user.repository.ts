@@ -170,7 +170,7 @@ export const userRepository = {
   ): Promise<any[]> {
     const query = `
       SELECT
-        u.id, u.email, u.zona_id, u.puntuacion, u.tagline, u.descripcion, u.experiencia,
+        u.id, u.zona_id, u.puntuacion, u.tagline, u.descripcion, u.experiencia,
         COALESCE(
           json_agg(
             json_build_object('id', fm.id, 'material', fm.material, 'disponible', fm.disponible)
