@@ -15,3 +15,11 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+export const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 20,
+  message: { error: "Demasiadas subidas de archivos, intente más tarde" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
