@@ -15,7 +15,8 @@
     "db:seed": "ts-node src/database/seed.ts",
     "db:truncate": "ts-node src/database/truncate.ts",
     "db:reset": "npm run db:init && npm run db:seed",
-    "seed": "ts-node src/database/seed.ts"
+    "seed": "ts-node src/database/seed.ts",
+    "r2:cors": "ts-node src/scripts/set-r2-cors.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
