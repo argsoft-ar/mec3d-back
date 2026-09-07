@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { MulterError } from "multer";
 import { AppError, ValidationError } from "../errors/app-error";
 
 export const errorHandler = (
@@ -15,6 +16,13 @@ export const errorHandler = (
     method: req.method,
     timestamp: new Date().toISOString(),
   });
+
+  // Multer no lanza AppError para límites (ej. tamaño máximo excedido): se traduce a 400 explícitamente
+  if (err instanceof MulterError && err.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({
+      error: "El archivo excede el tamaño máximo permitido",
+    });
+  }
 
   // Si es un error operacional conocido (AppError)
   if (err instanceof AppError) {

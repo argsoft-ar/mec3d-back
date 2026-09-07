@@ -1,6 +1,21 @@
 import { z } from "zod";
 import { paginationSchema } from "./pagination.schema";
 
+// Solo permite URLs http(s): bloquea esquemas peligrosos (javascript:, data:, file:, etc.)
+// que podrían inyectarse en imagenUrl/archivoUrl y ejecutarse si el frontend los usa como href/src.
+const httpUrlSchema = (message: string) =>
+  z
+    .string()
+    .url(message)
+    .refine((val) => {
+      try {
+        const protocol = new URL(val).protocol;
+        return protocol === "http:" || protocol === "https:";
+      } catch {
+        return false;
+      }
+    }, "La URL debe usar protocolo http o https");
+
 const specSchema = z.object({
   material: z.enum(["PLA", "PLA+", "PETG", "ABS", "TPU", "Nylon", "Resina"]),
   dimensiones: z.string().min(1, "Las dimensiones son requeridas"),
@@ -16,8 +31,8 @@ const specSchema = z.object({
 const productBodySchema = z.object({
   titulo: z.string().min(3, "El título debe tener al menos 3 caracteres"),
   descripcion: z.string().optional(),
-  imagenUrl: z.string().url("Debe ser una URL válida").optional(),
-  archivoUrl: z.string().url("El archivo URL debe ser válido y es obligatorio"),
+  imagenUrl: httpUrlSchema("Debe ser una URL válida").optional(),
+  archivoUrl: httpUrlSchema("El archivo URL debe ser válido y es obligatorio"),
   precioBase: z.number().positive("El precio debe ser un número positivo"),
   formato: z.string().optional(),
   especificaciones: specSchema.optional(),
@@ -30,7 +45,7 @@ export const updateProductSchema = z.object({ body: productBodySchema });
 
 export const partialUpdateProductSchema = z.object({
   body: productBodySchema.partial().extend({
-    archivoUrl: z.string().url("El archivo URL debe ser válido").optional(),
+    archivoUrl: httpUrlSchema("El archivo URL debe ser válido").optional(),
   }),
 });
 
