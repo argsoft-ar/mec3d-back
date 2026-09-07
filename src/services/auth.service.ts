@@ -9,7 +9,7 @@ import {
 } from "../interfaces/auth.interface";
 import { ConflictError, UnauthorizedError } from "../errors/app-error";
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = 12; // OWASP ASVS recomienda >=12 para bcrypt
 
 export const authService = {
   async register(data: RegisterRequest): Promise<RegisterResponse> {

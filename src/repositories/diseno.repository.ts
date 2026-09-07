@@ -6,6 +6,20 @@ const COLUMN_MAP: Record<string, string> = {
   precioBase: "precio_base",
 };
 
+// Allowlist estricta de columnas actualizables por partialUpdateProduct: los nombres de
+// columna se interpolan directo en el SQL (no se pueden parametrizar), así que se valida
+// contra este set cerrado en vez de confiar en las claves del objeto `updates` recibido
+// (defensa en profundidad ante mass-assignment / inyección de nombre de columna).
+const PARTIAL_UPDATE_ALLOWED_KEYS = new Set([
+  "titulo",
+  "descripcion",
+  "imagenUrl",
+  "archivoUrl",
+  "precioBase",
+  "formato",
+  "especificaciones",
+]);
+
 interface DisenoEspecificaciones {
   material: string;
   dimensiones: string;
@@ -252,6 +266,7 @@ export const disenoRepository = {
 
     for (const [key, value] of Object.entries(updates)) {
       if (key === "categoria") continue;
+      if (!PARTIAL_UPDATE_ALLOWED_KEYS.has(key)) continue;
 
       const dbCol = COLUMN_MAP[key] ?? key;
 
