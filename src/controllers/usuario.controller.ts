@@ -67,7 +67,9 @@ export const getFabricanteById = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const profile = await usuarioService.getProfile(req.params.id);
+    const profile = await usuarioService.getPublicFabricanteProfile(
+      req.params.id,
+    );
     res.status(200).json(profile);
   } catch (error) {
     next(error);

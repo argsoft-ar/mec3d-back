@@ -141,7 +141,7 @@ const modelFileFilter = (
 export const uploadModelMiddleware = multer({
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100 MB
+    fileSize: 30 * 1024 * 1024, // 30 MB
     files: 1,
     fields: 5,
   },

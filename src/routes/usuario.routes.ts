@@ -20,6 +20,7 @@ import {
   setTecnologiasSchema,
   checkUsernameSchema,
 } from "../schemas/usuario.schema";
+import { uuidParamSchema } from "../schemas/common.schema";
 
 const router = Router();
 
@@ -47,7 +48,11 @@ router.get(
   validateSchema(getFabricantesSchema),
   getFabricantesCercanos,
 );
-router.get("/fabricantes/:id", getFabricanteById);
+router.get(
+  "/fabricantes/:id",
+  validateSchema(uuidParamSchema),
+  getFabricanteById,
+);
 router.patch(
   "/rol",
   authenticateToken,

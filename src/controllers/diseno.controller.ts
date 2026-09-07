@@ -30,7 +30,10 @@ export const createProduct = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const userId = req.user?.id || req.body.disenadorId;
+    // El disenadorId nunca debe tomarse del body: la ruta exige authenticateToken,
+    // por lo que req.user siempre está definido aquí; aceptar req.body.disenadorId
+    // permitiría crear productos a nombre de otro usuario (IDOR / suplantación).
+    const userId = req.user?.id;
 
     if (!userId) {
       res.status(401).json({ error: "No autorizado" });
