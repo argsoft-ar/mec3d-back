@@ -43,6 +43,7 @@ export const uploadImageMiddleware = multer({
     fileSize: 5 * 1024 * 1024, // 5 MB
     files: 1,
     fields: 5,
+    fieldSize: 1 * 1024 * 1024, // 1 MB, límite explícito para valores de campos no-archivo
   },
   fileFilter,
 });
@@ -144,6 +145,7 @@ export const uploadModelMiddleware = multer({
     fileSize: 30 * 1024 * 1024, // 30 MB
     files: 1,
     fields: 5,
+    fieldSize: 1 * 1024 * 1024, // 1 MB, límite explícito para valores de campos no-archivo
   },
   fileFilter: modelFileFilter,
 });

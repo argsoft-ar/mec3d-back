@@ -28,7 +28,7 @@ export const usuarioService = {
   // en vez de confirmar su existencia (evita enumeración de cuentas no-fabricante).
   async getPublicFabricanteProfile(userId: string) {
     const user = await userRepository.findById(userId);
-    if (!user || user.rol_principal !== "fabricante") {
+    if (user?.rol_principal !== "fabricante") {
       throw new NotFoundError("Fabricante no encontrado");
     }
     const materiales = await userRepository.getMaterialesFabricante(userId);
