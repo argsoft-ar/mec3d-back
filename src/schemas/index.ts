@@ -4,3 +4,6 @@ export * from "./pagination.schema";
 export * from "./common.schema";
 export * from "./georef.schema";
 export * from "./usuario.schema";
+export * from "./compra.schema";
+export * from "./orden-fabricacion.schema";
+export * from "./chat.schema";
