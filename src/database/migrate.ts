@@ -90,6 +90,24 @@ const migrate = async () => {
       CONSTRAINT fk_orden_fabricante  FOREIGN KEY (fabricante_id) REFERENCES usuarios(id)
     );
 
+    -- codigo_entrega: a diferencia de compras.token_verificacion_hash, se guarda en texto
+    -- plano porque el comprador debe poder consultarlo repetidas veces hasta la entrega
+    -- (no es un secreto de un solo uso, es un código de 6 dígitos que exhibe la plataforma).
+    ALTER TABLE ordenes_fabricacion ADD COLUMN IF NOT EXISTS codigo_entrega VARCHAR(6) NULL;
+    ALTER TABLE ordenes_fabricacion ADD COLUMN IF NOT EXISTS codigo_entrega_generado_en TIMESTAMP NULL;
+    ALTER TABLE ordenes_fabricacion ADD COLUMN IF NOT EXISTS entrega_confirmada BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE ordenes_fabricacion ADD COLUMN IF NOT EXISTS entregado_en TIMESTAMP NULL;
+
+    -- 'confirmada': paso intermedio donde el comprador ya declaró la entrega (y vio el
+    -- código) pero todavía no se finaliza hasta que el fabricante ingrese el código.
+    ALTER TABLE ordenes_fabricacion DROP CONSTRAINT IF EXISTS ordenes_fabricacion_estado_check;
+    ALTER TABLE ordenes_fabricacion ADD CONSTRAINT ordenes_fabricacion_estado_check
+      CHECK (estado IN ('solicitado', 'en_negociacion', 'trato_cerrado', 'confirmada', 'rechazado', 'cancelado', 'completado'));
+
+    -- El token de escrow de compras se elimina: el único token de entrega válido es
+    -- el código de 6 dígitos de ordenes_fabricacion (ver arriba).
+    ALTER TABLE compras DROP COLUMN IF EXISTS token_verificacion_hash;
+
     -- conversaciones: un chat 1 a 1 por orden de fabricación.
     CREATE TABLE IF NOT EXISTS conversaciones (
       id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),

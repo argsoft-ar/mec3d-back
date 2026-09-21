@@ -1,19 +1,42 @@
 import pool from "../config/db.config";
 
 export const ordenFabricacionRepository = {
-  async createMany(compraId: string, fabricanteIds: string[]) {
-    const placeholders = fabricanteIds
-      .map((_, i) => `($1, $${i + 2})`)
-      .join(", ");
+  async createOne(compraId: string, fabricanteId: string) {
     const query = `
       INSERT INTO ordenes_fabricacion (compra_id, fabricante_id)
-      VALUES ${placeholders}
+      VALUES ($1, $2)
       RETURNING id, compra_id, fabricante_id, estado, precio_acordado,
                 precio_propuesto_comprador, precio_propuesto_fabricante,
-                cerrado_por_comprador, cerrado_por_fabricante, cerrado_en, creado_en;
+                cerrado_por_comprador, cerrado_por_fabricante, cerrado_en, creado_en,
+                codigo_entrega, codigo_entrega_generado_en, entrega_confirmada, entregado_en;
     `;
-    const result = await pool.query(query, [compraId, ...fabricanteIds]);
-    return result.rows;
+    const result = await pool.query(query, [compraId, fabricanteId]);
+    return result.rows[0];
+  },
+
+  // Regla de negocio: un mismo fabricante no puede tener más de una orden/conversación
+  // activa con el mismo comprador para el mismo diseño. "Activa" excluye canceladas y
+  // rechazadas, que sí permiten volver a solicitar fabricación desde cero.
+  async getActivaPorCompradorYFabricante(
+    compradorId: string,
+    fabricanteId: string,
+    disenoId: string,
+  ) {
+    const query = `
+      SELECT o.*, c.id_comprador
+      FROM ordenes_fabricacion o
+      JOIN compras c ON c.id = o.compra_id
+      WHERE c.id_comprador = $1 AND o.fabricante_id = $2 AND c.id_modelo = $3
+        AND o.estado NOT IN ('cancelado', 'rechazado')
+      ORDER BY o.creado_en DESC
+      LIMIT 1;
+    `;
+    const result = await pool.query(query, [
+      compradorId,
+      fabricanteId,
+      disenoId,
+    ]);
+    return result.rows[0] ?? null;
   },
 
   // Se trae id_comprador de la compra asociada para poder resolver el rol del
@@ -94,23 +117,92 @@ export const ordenFabricacionRepository = {
     const query = `
       UPDATE ordenes_fabricacion
       SET estado = 'cancelado'
-      WHERE compra_id = $1 AND id != $2 AND estado NOT IN ('trato_cerrado', 'completado');
+      WHERE compra_id = $1 AND id != $2
+        AND estado NOT IN ('trato_cerrado', 'confirmada', 'completado');
     `;
     await pool.query(query, [compraId, ordenGanadoraId]);
   },
 
+  async generarCodigoEntrega(id: string, codigo: string) {
+    const query = `
+      UPDATE ordenes_fabricacion
+      SET codigo_entrega = $1, codigo_entrega_generado_en = now()
+      WHERE id = $2
+      RETURNING *;
+    `;
+    const result = await pool.query(query, [codigo, id]);
+    return result.rows[0] ?? null;
+  },
+
+  // Guard atomico (WHERE estado = 'trato_cerrado'): el comprador declara la entrega
+  // una sola vez; la orden queda "confirmada" a la espera de que el fabricante valide
+  // el código.
+  async declararEntrega(id: string) {
+    const query = `
+      UPDATE ordenes_fabricacion
+      SET estado = 'confirmada'
+      WHERE id = $1 AND estado = 'trato_cerrado'
+      RETURNING *;
+    `;
+    const result = await pool.query(query, [id]);
+    return result.rows[0] ?? null;
+  },
+
+  // Guard atomico (WHERE estado = 'confirmada'): el fabricante solo puede finalizar
+  // la entrega despues de que el comprador la haya declarado.
+  async confirmarEntrega(id: string) {
+    const query = `
+      UPDATE ordenes_fabricacion
+      SET estado = 'completado', entrega_confirmada = true, entregado_en = now()
+      WHERE id = $1 AND estado = 'confirmada'
+      RETURNING *;
+    `;
+    const result = await pool.query(query, [id]);
+    return result.rows[0] ?? null;
+  },
+
+  // 'completado' se excluye a propósito: la orden entregada se oculta de "mis
+  // solicitudes" del fabricante pero la fila persiste intacta en la base.
+  async getMisSolicitudes(fabricanteId: string) {
+    const query = `
+      SELECT o.*, c.id_comprador, c.id_modelo,
+             d.titulo AS producto_titulo,
+             conv.id AS conversacion_id
+      FROM ordenes_fabricacion o
+      JOIN compras c ON c.id = o.compra_id
+      JOIN disenos d ON d.id = c.id_modelo
+      LEFT JOIN conversaciones conv ON conv.orden_fabricacion_id = o.id
+      WHERE o.fabricante_id = $1 AND o.estado != 'completado'
+      ORDER BY o.creado_en DESC;
+    `;
+    const result = await pool.query(query, [fabricanteId]);
+    return result.rows;
+  },
+
+  async getArchivoParaDescarga(ordenId: string) {
+    const query = `
+      SELECT o.fabricante_id, o.estado, d.archivo_url
+      FROM ordenes_fabricacion o
+      JOIN compras c ON c.id = o.compra_id
+      JOIN disenos d ON d.id = c.id_modelo
+      WHERE o.id = $1;
+    `;
+    const result = await pool.query(query, [ordenId]);
+    return result.rows[0] ?? null;
+  },
+
   async getFabricantesSugeridos(
-    formato: string | null,
+    material: string | null,
     zonaId: number | null,
     provinciaPrefix: string | null,
   ) {
     const query = `
-      SELECT u.id, u.zona_id, u.puntuacion, u.tagline
+      SELECT u.id, u.zona_id, u.puntuacion, u.tagline, u.username
       FROM usuarios u
       WHERE u.rol_principal = 'fabricante'
         AND ($1::text IS NULL OR EXISTS (
-          SELECT 1 FROM fabricante_tecnologias ft
-          WHERE ft.fabricante_id = u.id AND ft.disponible = true AND ft.tecnologia = $1
+          SELECT 1 FROM fabricante_materiales fm
+          WHERE fm.fabricante_id = u.id AND fm.disponible = true AND fm.material = $1
         ))
       ORDER BY
         CASE
@@ -125,7 +217,7 @@ export const ordenFabricacionRepository = {
         END,
         u.puntuacion DESC;
     `;
-    const result = await pool.query(query, [formato, zonaId, provinciaPrefix]);
+    const result = await pool.query(query, [material, zonaId, provinciaPrefix]);
     return result.rows;
   },
 };

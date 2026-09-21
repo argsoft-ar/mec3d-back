@@ -3,16 +3,11 @@ import {
   crearCompra,
   getMisCompras,
   descargarArchivo,
-  confirmarEntrega,
 } from "../controllers/compra.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { validateSchema } from "../middlewares/validate.middleware";
 import { uuidParamSchema } from "../schemas/common.schema";
-import {
-  crearCompraSchema,
-  confirmarEntregaBodySchema,
-} from "../schemas/compra.schema";
-import { confirmarEntregaLimiter } from "../middlewares/rate-limit.middleware";
+import { crearCompraSchema } from "../schemas/compra.schema";
 
 const router = Router();
 
@@ -34,16 +29,6 @@ router.get(
   authenticateToken,
   validateSchema(uuidParamSchema),
   descargarArchivo,
-);
-
-// Confirmación de entrega vía token de escrow
-router.post(
-  "/:id/confirmar-entrega",
-  authenticateToken,
-  confirmarEntregaLimiter,
-  validateSchema(uuidParamSchema),
-  validateSchema(confirmarEntregaBodySchema),
-  confirmarEntrega,
 );
 
 export default router;

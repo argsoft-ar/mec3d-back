@@ -1,17 +1,7 @@
-import crypto from "crypto";
 import { compraRepository } from "../repositories/compra.repository";
 import { disenoRepository } from "../repositories/diseno.repository";
 import { Compra, MisComprasItem } from "../interfaces/compra.interface";
-import {
-  NotFoundError,
-  ForbiddenError,
-  ConflictError,
-  UnauthorizedError,
-} from "../errors/app-error";
-
-function hashToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
+import { NotFoundError, ForbiddenError } from "../errors/app-error";
 
 function mapCompra(row: any): Compra {
   return {
@@ -29,36 +19,28 @@ function mapCompra(row: any): Compra {
 }
 
 export const compraService = {
-  async crear(
-    disenoId: string,
-    compradorId: string,
-  ): Promise<{ compra: Compra; tokenVerificacion: string }> {
+  async crear(disenoId: string, compradorId: string): Promise<Compra> {
     const diseno = await disenoRepository.getById(disenoId);
     if (!diseno || diseno.eliminado_en) {
       throw new NotFoundError("Diseño no encontrado");
     }
-
-    // Token de entrega/escrow: se genera server-side con 32 bytes de entropía,
-    // solo se persiste su hash SHA-256 y el valor en claro se devuelve una única
-    // vez en la respuesta de creación (nunca se loguea ni se vuelve a exponer).
-    const tokenPlano = crypto.randomBytes(32).toString("hex");
-    const tokenHash = hashToken(tokenPlano);
 
     const compra = await compraRepository.create({
       idComprador: compradorId,
       idModelo: diseno.id,
       idDisenador: diseno.disenador_id,
       precioPagado: Number(diseno.precio_base),
-      tokenVerificacionHash: tokenHash,
     });
 
-    return { compra: mapCompra(compra), tokenVerificacion: tokenPlano };
+    return mapCompra(compra);
   },
 
   async misCompras(compradorId: string): Promise<MisComprasItem[]> {
     const rows = await compraRepository.getMisCompras(compradorId);
     return rows.map((row: any) => ({
       ...mapCompra(row),
+      ordenFabricacionId: row.orden_fabricacion_id ?? null,
+      ordenFabricacionEstado: row.orden_fabricacion_estado ?? null,
       diseno: {
         titulo: row.diseno_titulo,
         imagenUrl: row.diseno_imagen_url,
@@ -78,46 +60,5 @@ export const compraService = {
       throw new ForbiddenError("No autorizado para descargar este archivo");
     }
     return row.archivo_url;
-  },
-
-  async confirmarEntrega(
-    compraId: string,
-    tokenPlano: string,
-    userId: string,
-  ): Promise<Compra> {
-    const compra = await compraRepository.getById(compraId);
-    if (!compra) {
-      throw new NotFoundError("Compra no encontrada");
-    }
-
-    // IDOR check: solo el comprador dueño de la compra puede confirmar la entrega.
-    // Se verifica antes de revelar entrega_confirmada para no filtrar ese estado
-    // a terceros no autorizados que solo adivinaron el id de la compra.
-    if (compra.id_comprador !== userId) {
-      throw new ForbiddenError("No autorizado para confirmar esta entrega");
-    }
-
-    if (compra.entrega_confirmada) {
-      throw new ConflictError("La entrega ya fue confirmada anteriormente");
-    }
-
-    const tokenHashBuffer = Buffer.from(hashToken(tokenPlano), "utf8");
-    const storedHashBuffer = Buffer.from(
-      compra.token_verificacion_hash,
-      "utf8",
-    );
-
-    // Comparación en tiempo constante: evita timing attacks al validar el hash del
-    // token. La respuesta nunca distingue si falló por longitud o por contenido.
-    const coincide =
-      tokenHashBuffer.length === storedHashBuffer.length &&
-      crypto.timingSafeEqual(tokenHashBuffer, storedHashBuffer);
-
-    if (!coincide) {
-      throw new UnauthorizedError("Token de verificación inválido");
-    }
-
-    const actualizado = await compraRepository.confirmarEntrega(compraId);
-    return mapCompra({ ...compra, ...actualizado });
   },
 };

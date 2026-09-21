@@ -1,23 +1,30 @@
+import crypto from "crypto";
 import { ordenFabricacionRepository } from "../repositories/orden-fabricacion.repository";
 import { compraRepository } from "../repositories/compra.repository";
 import { chatRepository } from "../repositories/chat.repository";
+import { mapMensaje } from "./chat.service";
 import { userRepository } from "../repositories/user.repository";
 import { disenoRepository } from "../repositories/diseno.repository";
 import { getProvinciaPrefix } from "../utils/zona.util";
 import { getIO } from "../sockets/io.instance";
 import {
   OrdenFabricacion,
+  OrdenFabricacionCreada,
+  OrdenFabricacionListItem,
   FabricanteSugerido,
+  CodigoEntregaResponse,
 } from "../interfaces/orden-fabricacion.interface";
 import {
   NotFoundError,
   ForbiddenError,
   ValidationError,
   ConflictError,
+  BadRequestError,
 } from "../errors/app-error";
 
 const ESTADOS_FINALES = [
   "trato_cerrado",
+  "confirmada",
   "cancelado",
   "rechazado",
   "completado",
@@ -61,7 +68,7 @@ export const ordenFabricacionService = {
     compraId: string,
     fabricanteIds: string[],
     compradorId: string,
-  ): Promise<OrdenFabricacion[]> {
+  ): Promise<OrdenFabricacionCreada[]> {
     const compra = await compraRepository.getById(compraId);
     if (!compra) {
       throw new NotFoundError("Compra no encontrada");
@@ -83,20 +90,40 @@ export const ordenFabricacionService = {
       }
     }
 
-    const ordenes = await ordenFabricacionRepository.createMany(
-      compraId,
-      fabricanteIds,
-    );
-
-    for (const orden of ordenes) {
-      await chatRepository.createConversacion({
-        ordenFabricacionId: orden.id,
-        compradorId,
-        fabricanteId: orden.fabricante_id,
-      });
+    // Regla de negocio: un fabricante no puede tener más de una orden/conversación
+    // activa con el mismo comprador para el mismo diseño. Si ya existe, se reutiliza
+    // en vez de crear una fila duplicada (evita error y mantiene el flujo fluido).
+    const ordenes: any[] = [];
+    for (const fabricanteId of fabricanteIds) {
+      const existente =
+        await ordenFabricacionRepository.getActivaPorCompradorYFabricante(
+          compradorId,
+          fabricanteId,
+          compra.id_modelo,
+        );
+      ordenes.push(
+        existente ??
+          (await ordenFabricacionRepository.createOne(compraId, fabricanteId)),
+      );
     }
 
-    return ordenes.map(mapOrden);
+    const conversacionIdPorOrdenId = new Map<string, string>();
+    for (const orden of ordenes) {
+      let conversacion = await chatRepository.getByOrdenFabricacionId(orden.id);
+      if (!conversacion) {
+        conversacion = await chatRepository.createConversacion({
+          ordenFabricacionId: orden.id,
+          compradorId,
+          fabricanteId: orden.fabricante_id,
+        });
+      }
+      conversacionIdPorOrdenId.set(orden.id, conversacion.id);
+    }
+
+    return ordenes.map((orden) => ({
+      ...mapOrden(orden),
+      conversacionId: conversacionIdPorOrdenId.get(orden.id)!,
+    }));
   },
 
   async fabricantesSugeridos(disenoId: string): Promise<FabricanteSugerido[]> {
@@ -108,8 +135,15 @@ export const ordenFabricacionService = {
     const zonaId: number | null = diseno.designer_zona_id ?? null;
     const provinciaPrefix = zonaId !== null ? getProvinciaPrefix(zonaId) : null;
 
+    // especificaciones es JSONB y pg ya lo parsea a objeto; se soporta string por si acaso.
+    const especificaciones =
+      typeof diseno.especificaciones === "string"
+        ? JSON.parse(diseno.especificaciones)
+        : diseno.especificaciones;
+    const material: string | null = especificaciones?.material ?? null;
+
     const rows = await ordenFabricacionRepository.getFabricantesSugeridos(
-      diseno.formato ?? null,
+      material,
       zonaId,
       provinciaPrefix,
     );
@@ -119,6 +153,7 @@ export const ordenFabricacionService = {
       zonaId: row.zona_id,
       puntuacion: Number(row.puntuacion),
       tagline: row.tagline,
+      username: row.username,
     }));
   },
 
@@ -145,6 +180,34 @@ export const ordenFabricacionService = {
       role,
       precio,
     );
+
+    // Bug conocido corregido: este endpoint es REST y antes no avisaba al otro
+    // lado del chat, que solo veía la propuesta nueva al refrescar manualmente.
+    const conversacion = await chatRepository.getByOrdenFabricacionId(ordenId);
+    if (conversacion) {
+      // Cartel embebido en el hilo del chat (no solo un estado aparte) para que
+      // quede visible en el historial qué precio se propuso y quién lo hizo.
+      const mensajePropuesta = await chatRepository.crearMensaje({
+        conversacionId: conversacion.id,
+        remitenteId: userId,
+        contenido:
+          role === "fabricante"
+            ? `El fabricante propuso $${precio}`
+            : `El comprador propuso $${precio}`,
+        tipo: "propuesta_precio",
+      });
+
+      getIO()
+        ?.to(conversacion.id)
+        .emit("precio-propuesto", {
+          ordenFabricacionId: ordenId,
+          role,
+          precio,
+          orden: mapOrden(updated),
+          mensaje: mapMensaje(mensajePropuesta),
+        });
+    }
+
     return mapOrden(updated);
   },
 
@@ -209,6 +272,15 @@ export const ordenFabricacionService = {
 
     await ordenFabricacionRepository.cancelarHermanas(orden.compra_id, ordenId);
 
+    // Código de entrega de 6 dígitos (texto plano, ver nota en migrate.ts): el
+    // comprador lo consulta cuantas veces quiera hasta que el fabricante lo cargue
+    // al confirmar la entrega física.
+    const codigoEntrega = crypto.randomInt(100000, 1000000).toString();
+    await ordenFabricacionRepository.generarCodigoEntrega(
+      ordenId,
+      codigoEntrega,
+    );
+
     const conversacion = await chatRepository.getByOrdenFabricacionId(ordenId);
     if (conversacion) {
       const mensajeSistema = await chatRepository.crearMensaje({
@@ -222,10 +294,166 @@ export const ordenFabricacionService = {
       io?.to(conversacion.id).emit("deal-closed", {
         ordenFabricacionId: ordenId,
         precioAcordado: precio,
-        mensaje: mensajeSistema,
+        mensaje: mapMensaje(mensajeSistema),
       });
     }
 
     return mapOrden(finalizada);
+  },
+
+  async getCodigoEntrega(
+    ordenId: string,
+    userId: string,
+  ): Promise<CodigoEntregaResponse> {
+    const orden = await ordenFabricacionRepository.getById(ordenId);
+    if (!orden) {
+      throw new NotFoundError("Orden de fabricación no encontrada");
+    }
+    // IDOR check: solo el comprador dueño de la orden puede ver el código de entrega.
+    if (orden.id_comprador !== userId) {
+      throw new ForbiddenError(
+        "No autorizado para consultar el código de entrega",
+      );
+    }
+    // Disponible desde que se cierra el trato hasta que el fabricante confirma la
+    // entrega (incluye 'confirmada', el paso intermedio donde el comprador ya lo vio).
+    if (orden.estado !== "trato_cerrado" && orden.estado !== "confirmada") {
+      throw new ConflictError(
+        "El código de entrega no está disponible en este estado",
+      );
+    }
+    return { codigoEntrega: orden.codigo_entrega };
+  },
+
+  async declararEntrega(
+    ordenId: string,
+    userId: string,
+  ): Promise<OrdenFabricacion> {
+    const orden = await ordenFabricacionRepository.getById(ordenId);
+    if (!orden) {
+      throw new NotFoundError("Orden de fabricación no encontrada");
+    }
+    // IDOR check: solo el comprador dueño de la orden puede declarar la entrega.
+    if (orden.id_comprador !== userId) {
+      throw new ForbiddenError("No autorizado para confirmar esta entrega");
+    }
+    if (orden.estado !== "trato_cerrado") {
+      throw new ConflictError(
+        "La orden no está en condiciones de confirmar la entrega",
+      );
+    }
+
+    const actualizada =
+      await ordenFabricacionRepository.declararEntrega(ordenId);
+    if (!actualizada) {
+      throw new ConflictError("La entrega ya fue confirmada anteriormente");
+    }
+
+    const conversacion = await chatRepository.getByOrdenFabricacionId(ordenId);
+    if (conversacion) {
+      const mensajeSistema = await chatRepository.crearMensaje({
+        conversacionId: conversacion.id,
+        remitenteId: null,
+        contenido:
+          "El comprador confirmó la entrega, pendiente de validación del fabricante",
+        tipo: "sistema",
+      });
+      getIO()?.to(conversacion.id).emit("entrega-declarada", {
+        ordenFabricacionId: ordenId,
+        mensaje: mapMensaje(mensajeSistema),
+      });
+    }
+
+    return mapOrden(actualizada);
+  },
+
+  async confirmarEntrega(
+    ordenId: string,
+    codigo: string,
+    userId: string,
+  ): Promise<OrdenFabricacion> {
+    const orden = await ordenFabricacionRepository.getById(ordenId);
+    if (!orden) {
+      throw new NotFoundError("Orden de fabricación no encontrada");
+    }
+
+    const role = resolveRole(orden, userId);
+    if (role !== "fabricante") {
+      throw new ForbiddenError("Solo el fabricante puede confirmar la entrega");
+    }
+    // El fabricante solo puede finalizar despues de que el comprador declare la
+    // entrega ('confirmada'); antes de eso no hay nada que validar.
+    if (orden.estado !== "confirmada") {
+      throw new ConflictError(
+        "La orden no está en condiciones de confirmar la entrega",
+      );
+    }
+
+    // Comparación en tiempo constante, igual que compraService.confirmarEntrega,
+    // para no filtrar por timing si el código coincide en longitud pero no en valor.
+    const codigoBuffer = Buffer.from(codigo, "utf8");
+    const storedBuffer = Buffer.from(orden.codigo_entrega ?? "", "utf8");
+    const coincide =
+      codigoBuffer.length === storedBuffer.length &&
+      crypto.timingSafeEqual(codigoBuffer, storedBuffer);
+    if (!coincide) {
+      // 400, no 401: un código inválido es un error de validación del cliente, no una
+      // falla de autenticación. Devolver 401 hacía que el front cerrara sesión sola.
+      throw new BadRequestError("Código de entrega inválido");
+    }
+
+    const actualizada =
+      await ordenFabricacionRepository.confirmarEntrega(ordenId);
+    if (!actualizada) {
+      throw new ConflictError("La entrega ya fue confirmada anteriormente");
+    }
+
+    const conversacion = await chatRepository.getByOrdenFabricacionId(ordenId);
+    if (conversacion) {
+      const mensajeSistema = await chatRepository.crearMensaje({
+        conversacionId: conversacion.id,
+        remitenteId: null,
+        contenido: "Entrega confirmada por el fabricante",
+        tipo: "sistema",
+      });
+      getIO()?.to(conversacion.id).emit("orden-completada", {
+        ordenFabricacionId: ordenId,
+        mensaje: mapMensaje(mensajeSistema),
+      });
+    }
+
+    return mapOrden(actualizada);
+  },
+
+  async misSolicitudes(
+    fabricanteId: string,
+  ): Promise<OrdenFabricacionListItem[]> {
+    const rows =
+      await ordenFabricacionRepository.getMisSolicitudes(fabricanteId);
+    return rows.map((row: any) => ({
+      ...mapOrden(row),
+      productoTitulo: row.producto_titulo,
+      conversacionId: row.conversacion_id,
+    }));
+  },
+
+  async getArchivoDescarga(ordenId: string, userId: string): Promise<string> {
+    const row =
+      await ordenFabricacionRepository.getArchivoParaDescarga(ordenId);
+    if (!row) {
+      throw new NotFoundError("Orden de fabricación no encontrada");
+    }
+    // IDOR check: solo el fabricante asignado a esta orden puede descargar el archivo.
+    if (row.fabricante_id !== userId) {
+      throw new ForbiddenError("No autorizado para descargar este archivo");
+    }
+    // Ventana de descarga: desde que se cierra el trato hasta que se confirma la
+    // entrega (estado pasa a 'completado' y la solicitud se oculta para el fabricante).
+    if (row.estado !== "trato_cerrado" && row.estado !== "confirmada") {
+      throw new ConflictError(
+        "El archivo solo está disponible mientras la orden está en curso",
+      );
+    }
+    return row.archivo_url;
   },
 };

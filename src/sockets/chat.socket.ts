@@ -2,6 +2,7 @@ import { Server, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
 import { verifyToken } from "../utils/jwt.util";
 import { chatRepository } from "../repositories/chat.repository";
+import { mapMensaje } from "../services/chat.service";
 import { setIO } from "./io.instance";
 import { TokenPayload } from "../interfaces/auth.interface";
 
@@ -142,8 +143,12 @@ export function initChatSocket(httpServer: HttpServer): Server {
           tipo: "texto",
         });
 
-        io.to(data.conversacionId).emit("nuevo-mensaje", mensaje);
-        callback?.({ ok: true, mensaje });
+        // El repositorio devuelve la fila cruda (snake_case); si se emite tal cual,
+        // "mensaje.conversacionId" queda undefined en el front y el evento se
+        // descarta en silencio (el mensaje nunca aparece en tiempo real).
+        const mensajeMapeado = mapMensaje(mensaje);
+        io.to(data.conversacionId).emit("nuevo-mensaje", mensajeMapeado);
+        callback?.({ ok: true, mensaje: mensajeMapeado });
       },
     );
   });

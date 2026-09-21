@@ -50,7 +50,7 @@ export const chatRepository = {
     conversacionId: string;
     remitenteId: string | null;
     contenido: string;
-    tipo: "texto" | "sistema";
+    tipo: "texto" | "sistema" | "propuesta_precio";
   }) {
     const query = `
       INSERT INTO mensajes (conversacion_id, remitente_id, contenido, tipo)
@@ -84,5 +84,33 @@ export const chatRepository = {
     `;
     const result = await pool.query(query, [conversacionId, limit, offset]);
     return { rows: result.rows, total };
+  },
+
+  async getConversacionesByUsuario(userId: string) {
+    const query = `
+      SELECT
+        c.id, c.orden_fabricacion_id, c.comprador_id, c.fabricante_id, c.creado_en,
+        comprador.username AS comprador_username, comprador.tagline AS comprador_tagline,
+        fabricante.username AS fabricante_username, fabricante.tagline AS fabricante_tagline,
+        o.estado AS orden_estado, o.precio_acordado, o.precio_propuesto_comprador, o.precio_propuesto_fabricante,
+        d.titulo AS producto_titulo,
+        ultimo.contenido AS ultimo_mensaje_contenido, ultimo.creado_en AS ultimo_mensaje_creado_en
+      FROM conversaciones c
+      JOIN ordenes_fabricacion o ON o.id = c.orden_fabricacion_id
+      JOIN compras cm ON cm.id = o.compra_id
+      JOIN disenos d ON d.id = cm.id_modelo
+      JOIN usuarios comprador ON comprador.id = c.comprador_id
+      JOIN usuarios fabricante ON fabricante.id = c.fabricante_id
+      LEFT JOIN LATERAL (
+        SELECT contenido, creado_en FROM mensajes m
+        WHERE m.conversacion_id = c.id
+        ORDER BY creado_en DESC
+        LIMIT 1
+      ) ultimo ON true
+      WHERE c.comprador_id = $1 OR c.fabricante_id = $1
+      ORDER BY COALESCE(ultimo.creado_en, c.creado_en) DESC;
+    `;
+    const result = await pool.query(query, [userId]);
+    return result.rows;
   },
 };

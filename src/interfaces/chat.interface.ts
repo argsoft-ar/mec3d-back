@@ -6,7 +6,7 @@ export interface Conversacion {
   creadoEn: string;
 }
 
-export type TipoMensaje = "texto" | "sistema";
+export type TipoMensaje = "texto" | "sistema" | "propuesta_precio";
 
 export interface Mensaje {
   id: string;
@@ -20,4 +20,22 @@ export interface Mensaje {
 export interface EnviarMensajeDTO {
   conversacionId: string;
   contenido: string;
+}
+
+export interface ConversacionResumen {
+  id: string;
+  ordenFabricacionId: string;
+  productoTitulo: string | null;
+  miRol: "comprador" | "fabricante";
+  contraparte: {
+    id: string;
+    username: string | null;
+    tagline: string | null;
+  };
+  estadoOrden: string;
+  precioAcordado: number | null;
+  precioPropuestoComprador: number | null;
+  precioPropuestoFabricante: number | null;
+  ultimoMensaje: { contenido: string; creadoEn: string } | null;
+  creadoEn: string;
 }

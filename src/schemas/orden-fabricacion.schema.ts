@@ -26,3 +26,11 @@ export const cerrarTratoBodySchema = z.object({
     precio: z.number().positive("El precio debe ser un número positivo"),
   }),
 });
+
+export const confirmarEntregaOrdenBodySchema = z.object({
+  body: z.object({
+    codigo: z
+      .string()
+      .regex(/^\d{6}$/, "El código de entrega debe tener 6 dígitos"),
+  }),
+});

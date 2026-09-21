@@ -4,6 +4,11 @@ import {
   getFabricantesSugeridos,
   proponerPrecio,
   cerrarTrato,
+  getCodigoEntrega,
+  declararEntregaOrden,
+  confirmarEntregaOrden,
+  getMisSolicitudesFabricacion,
+  descargarDiseno,
 } from "../controllers/orden-fabricacion.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { validateSchema } from "../middlewares/validate.middleware";
@@ -13,8 +18,12 @@ import {
   fabricantesSugeridosSchema,
   proponerPrecioBodySchema,
   cerrarTratoBodySchema,
+  confirmarEntregaOrdenBodySchema,
 } from "../schemas/orden-fabricacion.schema";
-import { cerrarTratoLimiter } from "../middlewares/rate-limit.middleware";
+import {
+  cerrarTratoLimiter,
+  confirmarEntregaLimiter,
+} from "../middlewares/rate-limit.middleware";
 
 const router = Router();
 
@@ -25,6 +34,9 @@ router.get(
   validateSchema(fabricantesSugeridosSchema),
   getFabricantesSugeridos,
 );
+
+// Listado de solicitudes recibidas por el fabricante autenticado ("Mis solicitudes")
+router.get("/mis-solicitudes", authenticateToken, getMisSolicitudesFabricacion);
 
 // Solicitar cotización a uno o más fabricantes para una compra
 router.post(
@@ -49,6 +61,43 @@ router.post(
   validateSchema(uuidParamSchema),
   validateSchema(cerrarTratoBodySchema),
   cerrarTrato,
+);
+
+// Código de entrega de 6 dígitos: solo lo puede consultar el comprador dueño, y
+// mientras no se haya confirmado la entrega (deja de estar disponible tras completarse).
+router.get(
+  "/:id/codigo-entrega",
+  authenticateToken,
+  validateSchema(uuidParamSchema),
+  getCodigoEntrega,
+);
+
+// El comprador declara la entrega (ya recibió la pieza) y expone el código al
+// fabricante in situ; la orden queda "confirmada" hasta que el fabricante la valide.
+router.post(
+  "/:id/declarar-entrega",
+  authenticateToken,
+  validateSchema(uuidParamSchema),
+  declararEntregaOrden,
+);
+
+// El fabricante ingresa el código de entrega que le mostró el comprador in situ.
+router.post(
+  "/:id/confirmar-entrega",
+  authenticateToken,
+  confirmarEntregaLimiter,
+  validateSchema(uuidParamSchema),
+  validateSchema(confirmarEntregaOrdenBodySchema),
+  confirmarEntregaOrden,
+);
+
+// Descarga del archivo de diseño habilitada al fabricante mientras el trato esté
+// cerrado y no se haya confirmado la entrega.
+router.get(
+  "/:id/descargar-diseno",
+  authenticateToken,
+  validateSchema(uuidParamSchema),
+  descargarDiseno,
 );
 
 export default router;

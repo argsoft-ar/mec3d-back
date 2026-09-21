@@ -6,11 +6,10 @@ export const compraRepository = {
     idModelo: string;
     idDisenador: string;
     precioPagado: number;
-    tokenVerificacionHash: string;
   }) {
     const query = `
-      INSERT INTO compras (id_comprador, id_modelo, id_disenador, precio_pagado, token_verificacion_hash)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO compras (id_comprador, id_modelo, id_disenador, precio_pagado)
+      VALUES ($1, $2, $3, $4)
       RETURNING id, id_comprador, id_modelo, id_disenador, precio_pagado, fecha,
                 entrega_confirmada, entregado_en, fondos_liberados, fondos_liberados_en;
     `;
@@ -19,7 +18,6 @@ export const compraRepository = {
       data.idModelo,
       data.idDisenador,
       data.precioPagado,
-      data.tokenVerificacionHash,
     ];
     const result = await pool.query(query, values);
     return result.rows[0];
@@ -37,9 +35,16 @@ export const compraRepository = {
         c.id, c.id_modelo, c.id_disenador, c.precio_pagado, c.fecha,
         c.entrega_confirmada, c.entregado_en, c.fondos_liberados, c.fondos_liberados_en,
         d.titulo AS diseno_titulo, d.imagen_url AS diseno_imagen_url,
-        d.formato AS diseno_formato, d.archivo_url AS diseno_archivo_url
+        d.formato AS diseno_formato, d.archivo_url AS diseno_archivo_url,
+        orden.id AS orden_fabricacion_id, orden.estado AS orden_fabricacion_estado
       FROM compras c
       JOIN disenos d ON d.id = c.id_modelo
+      LEFT JOIN LATERAL (
+        SELECT id, estado FROM ordenes_fabricacion
+        WHERE compra_id = c.id AND estado IN ('trato_cerrado', 'confirmada', 'completado')
+        ORDER BY creado_en DESC
+        LIMIT 1
+      ) orden ON true
       WHERE c.id_comprador = $1
       ORDER BY c.fecha DESC;
     `;
@@ -58,18 +63,6 @@ export const compraRepository = {
       WHERE c.id = $1;
     `;
     const result = await pool.query(query, [compraId]);
-    return result.rows[0] ?? null;
-  },
-
-  async confirmarEntrega(id: string) {
-    const query = `
-      UPDATE compras
-      SET entrega_confirmada = true, entregado_en = now(),
-          fondos_liberados = true, fondos_liberados_en = now()
-      WHERE id = $1
-      RETURNING id, entrega_confirmada, entregado_en, fondos_liberados, fondos_liberados_en;
-    `;
-    const result = await pool.query(query, [id]);
     return result.rows[0] ?? null;
   },
 };

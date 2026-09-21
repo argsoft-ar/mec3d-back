@@ -48,7 +48,8 @@ export const usuarioService = {
   },
 
   async updateProfile(userId: string, data: UpdateProfileDTO) {
-    if (data.username !== undefined) {
+    // Empty string is a shared "no username" placeholder in DB, not a real value to check
+    if (data.username !== undefined && data.username !== "") {
       const taken = await userRepository.isUsernameTaken(data.username, userId);
       if (taken) throw new ConflictError("El nombre de usuario ya está en uso");
     }

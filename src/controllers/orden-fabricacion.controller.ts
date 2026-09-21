@@ -93,3 +93,113 @@ export const cerrarTrato = async (
     next(error);
   }
 };
+
+export const getCodigoEntrega = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const data = await ordenFabricacionService.getCodigoEntrega(id, userId);
+    res.status(200).json({ message: "Código de entrega obtenido", data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const declararEntregaOrden = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const orden = await ordenFabricacionService.declararEntrega(id, userId);
+    res.status(200).json({
+      message: "Entrega confirmada, pendiente de validación del fabricante",
+      data: orden,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmarEntregaOrden = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { codigo } = req.body;
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const orden = await ordenFabricacionService.confirmarEntrega(
+      id,
+      codigo,
+      userId,
+    );
+    res.status(200).json({ message: "Entrega confirmada", data: orden });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMisSolicitudesFabricacion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const fabricanteId = req.user?.id;
+    if (!fabricanteId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const ordenes = await ordenFabricacionService.misSolicitudes(fabricanteId);
+    res.status(200).json({ message: "Solicitudes obtenidas", data: ordenes });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const descargarDiseno = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const archivoUrl = await ordenFabricacionService.getArchivoDescarga(
+      id,
+      userId,
+    );
+    res.redirect(302, archivoUrl);
+  } catch (error) {
+    next(error);
+  }
+};

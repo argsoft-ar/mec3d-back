@@ -24,8 +24,6 @@ export interface CompraDisenoInfo {
 
 export interface MisComprasItem extends Compra {
   diseno: CompraDisenoInfo;
-}
-
-export interface ConfirmarEntregaDTO {
-  token: string;
+  ordenFabricacionId: string | null;
+  ordenFabricacionEstado: string | null;
 }

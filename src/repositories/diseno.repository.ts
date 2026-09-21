@@ -329,7 +329,7 @@ export const disenoRepository = {
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
       LEFT JOIN categorias c ON d.categoria_id = c.id
-      WHERE d.disenador_id = $1;
+      WHERE d.disenador_id = $1 AND d.eliminado_en IS NULL;
     `;
     const result = await pool.query(query, [designerId]);
     return result.rows;

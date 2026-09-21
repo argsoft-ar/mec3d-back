@@ -33,9 +33,27 @@ export interface CerrarTratoDTO {
   precio: number;
 }
 
+export interface ConfirmarEntregaOrdenDTO {
+  codigo: string;
+}
+
+export interface CodigoEntregaResponse {
+  codigoEntrega: string;
+}
+
+export interface OrdenFabricacionListItem extends OrdenFabricacion {
+  productoTitulo: string;
+  conversacionId: string | null;
+}
+
 export interface FabricanteSugerido {
   id: string;
   zonaId: number | null;
   puntuacion: number;
   tagline: string | null;
+  username: string | null;
+}
+
+export interface OrdenFabricacionCreada extends OrdenFabricacion {
+  conversacionId: string;
 }
