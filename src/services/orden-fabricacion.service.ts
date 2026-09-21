@@ -358,10 +358,12 @@ export const ordenFabricacionService = {
           "El comprador confirmó la entrega, pendiente de validación del fabricante",
         tipo: "sistema",
       });
-      getIO()?.to(conversacion.id).emit("entrega-declarada", {
-        ordenFabricacionId: ordenId,
-        mensaje: mapMensaje(mensajeSistema),
-      });
+      getIO()
+        ?.to(conversacion.id)
+        .emit("entrega-declarada", {
+          ordenFabricacionId: ordenId,
+          mensaje: mapMensaje(mensajeSistema),
+        });
     }
 
     return mapOrden(actualizada);
@@ -416,10 +418,12 @@ export const ordenFabricacionService = {
         contenido: "Entrega confirmada por el fabricante",
         tipo: "sistema",
       });
-      getIO()?.to(conversacion.id).emit("orden-completada", {
-        ordenFabricacionId: ordenId,
-        mensaje: mapMensaje(mensajeSistema),
-      });
+      getIO()
+        ?.to(conversacion.id)
+        .emit("orden-completada", {
+          ordenFabricacionId: ordenId,
+          mensaje: mapMensaje(mensajeSistema),
+        });
     }
 
     return mapOrden(actualizada);
