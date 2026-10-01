@@ -6,6 +6,9 @@ import uploadRoutes from "./upload.routes";
 import georefRoutes from "./georef.routes";
 import usuarioRoutes from "./usuario.routes";
 import catalogoRoutes from "./catalogo.routes";
+import compraRoutes from "./compra.routes";
+import ordenFabricacionRoutes from "./orden-fabricacion.routes";
+import conversacionRoutes from "./chat.routes";
 
 const router = Router();
 
@@ -29,5 +32,14 @@ router.use("/usuarios", usuarioRoutes);
 
 // Rutas de catálogo (materiales y tecnologías disponibles)
 router.use("/catalogos", catalogoRoutes);
+
+// Rutas de compras (descarga directa y punto de partida de fabricación)
+router.use("/compras", compraRoutes);
+
+// Rutas de órdenes de fabricación (cotizaciones, negociación y cierre de trato)
+router.use("/ordenes-fabricacion", ordenFabricacionRoutes);
+
+// Rutas de conversaciones (historial de chat comprador-fabricante)
+router.use("/conversaciones", conversacionRoutes);
 
 export { router };
