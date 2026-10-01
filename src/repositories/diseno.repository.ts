@@ -45,7 +45,8 @@ export const disenoRepository = {
         c.nombre AS categoria_nombre
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
-      LEFT JOIN categorias c ON d.categoria_id = c.id;
+      LEFT JOIN categorias c ON d.categoria_id = c.id
+      WHERE d.eliminado_en IS NULL;
     `;
     const result = await pool.query(query);
     return result.rows;
@@ -62,8 +63,8 @@ export const disenoRepository = {
     categoria?: string,
   ): Promise<{ rows: any[]; total: number }> {
     const countQuery = categoria
-      ? `SELECT COUNT(*) FROM disenos d LEFT JOIN categorias c ON d.categoria_id = c.id WHERE c.nombre = $1`
-      : `SELECT COUNT(*) FROM disenos;`;
+      ? `SELECT COUNT(*) FROM disenos d LEFT JOIN categorias c ON d.categoria_id = c.id WHERE c.nombre = $1 AND d.eliminado_en IS NULL`
+      : `SELECT COUNT(*) FROM disenos WHERE eliminado_en IS NULL;`;
     const countResult = await pool.query(
       countQuery,
       categoria ? [categoria] : [],
@@ -110,7 +111,8 @@ export const disenoRepository = {
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
       LEFT JOIN categorias c ON d.categoria_id = c.id
-      ${categoriaParamIndex !== null ? `WHERE c.nombre = $${categoriaParamIndex}` : ""}
+      WHERE d.eliminado_en IS NULL
+      ${categoriaParamIndex !== null ? `AND c.nombre = $${categoriaParamIndex}` : ""}
       ${zona ? orderByZona : "ORDER BY d.creado_en DESC"}
       LIMIT $1 OFFSET $2;
     `;
@@ -139,7 +141,7 @@ export const disenoRepository = {
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
       LEFT JOIN categorias c ON d.categoria_id = c.id
-      WHERE d.id = $1;
+      WHERE d.id = $1 AND d.eliminado_en IS NULL;
     `;
     const result = await pool.query(query, [id]);
     return result.rows[0] ?? null;
@@ -297,7 +299,13 @@ export const disenoRepository = {
   },
 
   async deleteProduct(id: string) {
-    const query = `DELETE FROM disenos WHERE id = $1 RETURNING id;`;
+    // Soft-delete: una compra puede referenciar este diseño (FK compras.id_modelo),
+    // por lo que nunca se hace DELETE físico, solo se marca eliminado_en.
+    const query = `
+      UPDATE disenos SET eliminado_en = now()
+      WHERE id = $1 AND eliminado_en IS NULL
+      RETURNING id;
+    `;
     const result = await pool.query(query, [id]);
     return result.rows[0];
   },
