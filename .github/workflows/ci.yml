@@ -8,6 +8,9 @@ on:
   pull_request:
     branches: ["**"]
 
+permissions:
+  contents: read
+
 jobs:
   test-and-build:
     name: Test & Build
@@ -26,6 +29,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit dependencies (production)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Run tests
         run: npm run test:ci

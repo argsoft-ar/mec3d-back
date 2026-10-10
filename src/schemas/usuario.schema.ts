@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { zonaIdQuerySchema, fabricantesPaginationQuery } from "./common.schema";
+import { esCuentaMercadopagoValida } from "../utils/policy.util";
+
+const sinDuplicados = (items: string[]) =>
+  new Set(items.map((i) => i.toLowerCase())).size === items.length;
 
 export const updateProfileSchema = z.object({
   body: z.object({
@@ -6,7 +11,15 @@ export const updateProfileSchema = z.object({
     descripcion: z.string().max(2000).optional(),
     experiencia: z.string().max(2000).optional(),
     zonaId: z.number().int().positive().max(99_999_999).optional(),
-    cuentaMercadopago: z.string().max(255).optional(),
+    // "" borra la cuenta; si no, CBU/CVU (22 dígitos), alias (6-20) o email.
+    cuentaMercadopago: z
+      .string()
+      .trim()
+      .max(255)
+      .refine((v) => v === "" || esCuentaMercadopagoValida(v), {
+        message: "cuentaMercadopago debe ser un CBU/CVU de 22 dígitos, un alias (6-20 caracteres) o un email",
+      })
+      .optional(),
     username: z
       .string()
       .min(3)
@@ -31,15 +44,17 @@ export const checkUsernameSchema = z.object({
 export const setMaterialesSchema = z.object({
   body: z.object({
     materiales: z
-      .array(z.string().min(1).max(100))
+      .array(z.string().trim().min(1).max(100))
       .min(1, "Debe indicar al menos un material")
-      .max(50, "No se pueden registrar más de 50 materiales"),
+      .max(50, "No se pueden registrar más de 50 materiales")
+      .refine(sinDuplicados, "Los materiales no pueden repetirse"),
   }),
 });
 
 export const getFabricantesSchema = z.object({
   query: z.object({
-    zonaId: z.string().regex(/^\d+$/, "zonaId debe ser numérico").optional(),
+    zonaId: zonaIdQuerySchema.optional(),
+    ...fabricantesPaginationQuery,
   }),
 });
 
@@ -56,7 +71,8 @@ export const changeRolSchema = z.object({
 export const setTecnologiasSchema = z.object({
   body: z.object({
     tecnologias: z
-      .array(z.string().min(1).max(100))
-      .max(20, "No se pueden registrar más de 20 tecnologías"),
+      .array(z.string().trim().min(1).max(100))
+      .max(20, "No se pueden registrar más de 20 tecnologías")
+      .refine(sinDuplicados, "Las tecnologías no pueden repetirse"),
   }),
 });

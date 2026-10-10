@@ -1,6 +1,7 @@
-.env
-CLOUDINARY_API_KEY
-
-dist/
-
 node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.pem
+*.log

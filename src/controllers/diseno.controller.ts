@@ -142,3 +142,25 @@ export const getMyProducts = async (
     next(error);
   }
 };
+
+export const getArchivoPreview = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const archivo = await productService.getArchivoPreview(req.params.id, userId);
+    // La URL firmada da acceso al archivo de pago: no debe quedar en caches.
+    res.set("Cache-Control", "no-store");
+    res.status(200).json(archivo);
+  } catch (error) {
+    next(error);
+  }
+};

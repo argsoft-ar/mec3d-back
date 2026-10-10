@@ -6,6 +6,7 @@ import {
   partialUpdateProduct,
   deleteProduct,
   getMyProducts,
+  getArchivoPreview,
 } from "../controllers/diseno.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { validateSchema } from "../middlewares/validate.middleware";
@@ -21,6 +22,15 @@ const router = Router();
 
 // Obtener mis productos (protegido por auth)
 router.get("/mis-disenos", authenticateToken, getMyProducts);
+
+// URL firmada (vida corta) del archivo para el preview 3D: dueño, comprador pagado o
+// fabricante con orden activa pagada. Nunca se expone archivoUrl en lecturas públicas.
+router.get(
+  "/:id/archivo-preview",
+  authenticateToken,
+  validateSchema(uuidParamSchema),
+  getArchivoPreview,
+);
 
 // Obtener todos los productos (público) - con paginación y orden por cercanía opcional
 router.get("/", validateSchema(listProductsSchema), getAllProducts);

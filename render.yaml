@@ -10,6 +10,8 @@ services:
     runtime: node
     region: oregon
     plan: free
+    # preDeployCommand (npm run db:migrate) no está disponible en el plan free de Render:
+    # la migración corre en el build. Al pasar a un plan pago, moverla a preDeployCommand.
     buildCommand: npm ci && npm run build && npm run db:migrate
     startCommand: node dist/server.js
     healthCheckPath: /api/v1/health
@@ -23,6 +25,21 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      # Secreto HMAC del código de entrega (mínimo 32 caracteres, distinto de JWT_SECRET)
+      - key: DELIVERY_CODE_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
       - key: JWT_EXPIRES_IN
         value: 1d
       # URL del frontend en Vercel (producción)
@@ -35,4 +52,10 @@ services:
       - key: CLOUDINARY_API_SECRET
         sync: false
       - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_WEBHOOK_SECRET
+        sync: false
+      - key: MP_NOTIFICATION_URL
+        sync: false
+      - key: FRONTEND_URL
         sync: false

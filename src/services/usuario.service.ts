@@ -6,6 +6,9 @@ import {
   ConflictError,
 } from "../errors/app-error";
 import { getProvinciaPrefix } from "../utils/zona.util";
+import { withTransaction } from "../utils/transaction.util";
+import { cuentaEnCooldown, cuentaHabilitadaDesde } from "../utils/policy.util";
+import { catalogoService } from "./catalogo.service";
 
 export const usuarioService = {
   async getProfile(userId: string) {
@@ -64,25 +67,50 @@ export const usuarioService = {
       throw new ForbiddenError(
         "Solo los fabricantes pueden configurar materiales",
       );
-    await userRepository.setMaterialesFabricante(userId, materiales);
+    // Solo valores del catálogo: un nombre inexistente corta con 400 antes de escribir.
+    const resueltos = await catalogoService.resolverMateriales(materiales);
+    await userRepository.setMaterialesFabricante(userId, resueltos);
     return userRepository.getMaterialesFabricante(userId);
   },
 
-  async getFabricantesCercanos(zonaId?: number) {
+  async getFabricantesCercanos(zonaId: number | undefined, page: number, limit: number) {
     const provinciaPrefix = zonaId != null ? getProvinciaPrefix(zonaId) : null;
     return userRepository.getFabricantesCercanos(
       zonaId ?? null,
       provinciaPrefix,
+      limit,
+      (page - 1) * limit,
     );
   },
 
+  // Atómico: el rol y la limpieza de datos de fabricante se aplican juntos. No se permite
+  // cambiar de rol con órdenes en curso ni con fondos retenidos o payouts pendientes, que
+  // quedarían huérfanos de la función que los respalda.
   async changeRol(userId: string, rol: string): Promise<any> {
-    const result = await userRepository.updateRol(userId, rol);
-    if (!result) throw new NotFoundError("Usuario no encontrado");
-    if (rol !== "fabricante") {
-      await userRepository.clearFabricanteRows(userId);
-    }
-    return result;
+    return withTransaction(async (client) => {
+      const actual = await userRepository.lockRolById(client, userId);
+      if (!actual) throw new NotFoundError("Usuario no encontrado");
+
+      if (actual.rol_principal !== rol) {
+        if (await userRepository.tieneOrdenesActivas(client, userId)) {
+          throw new ConflictError(
+            "No podés cambiar de rol mientras tengas órdenes de fabricación en curso",
+          );
+        }
+        if (await userRepository.tieneMovimientosPendientes(client, userId)) {
+          throw new ConflictError(
+            "No podés cambiar de rol mientras tengas fondos retenidos o pagos pendientes",
+          );
+        }
+      }
+
+      const result = await userRepository.updateRol(userId, rol, client);
+      if (!result) throw new NotFoundError("Usuario no encontrado");
+      if (rol !== "fabricante") {
+        await userRepository.clearFabricanteRows(client, userId);
+      }
+      return result;
+    });
   },
 
   async setTecnologias(
@@ -94,7 +122,8 @@ export const usuarioService = {
       throw new ForbiddenError(
         "Solo los fabricantes pueden configurar tecnologías",
       );
-    await userRepository.setTecnologiasFabricante(userId, tecnologias);
+    const resueltas = await catalogoService.resolverTecnologias(tecnologias);
+    await userRepository.setTecnologiasFabricante(userId, resueltas);
     return userRepository.getTecnologiasFabricante(userId);
   },
 
@@ -115,6 +144,10 @@ function mapUserRow(row: any) {
     zonaId: row.zona_id,
     puntuacion: Number.parseFloat(row.puntuacion) || 0,
     cuentaMercadopago: row.cuenta_mercadopago,
+    cuentaMercadopagoEnCooldown: cuentaEnCooldown(row.cuenta_mercadopago_actualizada_en),
+    cuentaMercadopagoHabilitadaDesde: cuentaHabilitadaDesde(
+      row.cuenta_mercadopago_actualizada_en,
+    )?.toISOString() ?? null,
     tagline: row.tagline,
     descripcion: row.descripcion,
     experiencia: row.experiencia,

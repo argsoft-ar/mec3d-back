@@ -12,7 +12,7 @@ const MENSAJES_WINDOW_MS = 60_000;
 const MENSAJES_MAX = 30;
 const mensajesPorUsuario = new Map<string, number[]>();
 
-function excedeLimite(userId: string): boolean {
+export function excedeLimite(userId: string): boolean {
   const ahora = Date.now();
   const timestamps = (mensajesPorUsuario.get(userId) ?? []).filter(
     (t) => ahora - t < MENSAJES_WINDOW_MS,
@@ -20,6 +20,23 @@ function excedeLimite(userId: string): boolean {
   timestamps.push(ahora);
   mensajesPorUsuario.set(userId, timestamps);
   return timestamps.length > MENSAJES_MAX;
+}
+
+// Sin esto el mapa crece con cada usuario que alguna vez escribió: se descartan las entradas
+// cuya última marca ya salió de la ventana.
+export function purgarMensajesViejos(ahora: number = Date.now()): number {
+  let purgadas = 0;
+  for (const [userId, timestamps] of mensajesPorUsuario) {
+    if (timestamps.every((t) => ahora - t >= MENSAJES_WINDOW_MS)) {
+      mensajesPorUsuario.delete(userId);
+      purgadas++;
+    }
+  }
+  return purgadas;
+}
+
+export function cantidadUsuariosEnLimite(): number {
+  return mensajesPorUsuario.size;
 }
 
 interface JoinAck {
@@ -31,6 +48,14 @@ interface EnviarMensajeAck {
   ok: boolean;
   error?: string;
   mensaje?: unknown;
+}
+
+let purgaTimer: NodeJS.Timeout | null = null;
+
+function purgarPeriodicamente(): void {
+  if (purgaTimer) return;
+  purgaTimer = setInterval(() => purgarMensajesViejos(), MENSAJES_WINDOW_MS);
+  purgaTimer.unref();
 }
 
 export function initChatSocket(httpServer: HttpServer): Server {
@@ -154,5 +179,6 @@ export function initChatSocket(httpServer: HttpServer): Server {
   });
 
   setIO(io);
+  purgarPeriodicamente();
   return io;
 }

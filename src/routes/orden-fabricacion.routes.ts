@@ -9,6 +9,8 @@ import {
   confirmarEntregaOrden,
   getMisSolicitudesFabricacion,
   descargarDiseno,
+  cancelarOrden,
+  disputarOrden,
 } from "../controllers/orden-fabricacion.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { validateSchema } from "../middlewares/validate.middleware";
@@ -19,10 +21,15 @@ import {
   proponerPrecioBodySchema,
   cerrarTratoBodySchema,
   confirmarEntregaOrdenBodySchema,
+  disputarBodySchema,
 } from "../schemas/orden-fabricacion.schema";
 import {
   cerrarTratoLimiter,
+  codigoEntregaLimiter,
   confirmarEntregaLimiter,
+  disputaLimiter,
+  pagoLimiter,
+  proponerPrecioLimiter,
 } from "../middlewares/rate-limit.middleware";
 
 const router = Router();
@@ -49,6 +56,7 @@ router.post(
 router.post(
   "/:id/proponer-precio",
   authenticateToken,
+  proponerPrecioLimiter,
   validateSchema(uuidParamSchema),
   validateSchema(proponerPrecioBodySchema),
   proponerPrecio,
@@ -63,11 +71,13 @@ router.post(
   cerrarTrato,
 );
 
-// Código de entrega de 6 dígitos: solo lo puede consultar el comprador dueño, y
-// mientras no se haya confirmado la entrega (deja de estar disponible tras completarse).
-router.get(
+// Código de entrega de 6 dígitos: solo lo puede pedir el comprador dueño, y mientras no se
+// haya confirmado la entrega. POST (no GET) porque cada llamada genera un código nuevo e
+// invalida el anterior: no es una lectura idempotente ni debe cachearse ni prefetchearse.
+router.post(
   "/:id/codigo-entrega",
   authenticateToken,
+  codigoEntregaLimiter,
   validateSchema(uuidParamSchema),
   getCodigoEntrega,
 );
@@ -89,6 +99,27 @@ router.post(
   validateSchema(uuidParamSchema),
   validateSchema(confirmarEntregaOrdenBodySchema),
   confirmarEntregaOrden,
+);
+
+// El comprador congela los fondos de una orden confirmada / con trato cerrado y pago acreditado;
+// un admin la resuelve (POST /admin/disputas/:ordenId/resolver).
+router.post(
+  "/:id/disputar",
+  authenticateToken,
+  disputaLimiter,
+  validateSchema(uuidParamSchema),
+  validateSchema(disputarBodySchema),
+  disputarOrden,
+);
+
+// Cancelación antes de declararse la entrega. Con el pago acreditado solo la puede hacer el
+// fabricante (reembolsa al comprador) o un admin; el comprador debe disputar.
+router.post(
+  "/:id/cancelar",
+  authenticateToken,
+  pagoLimiter,
+  validateSchema(uuidParamSchema),
+  cancelarOrden,
 );
 
 // Descarga del archivo de diseño habilitada al fabricante mientras el trato esté

@@ -1,43 +1,100 @@
 import { compraRepository } from "../repositories/compra.repository";
 import { disenoRepository } from "../repositories/diseno.repository";
-import { Compra, MisComprasItem } from "../interfaces/compra.interface";
-import { NotFoundError, ForbiddenError } from "../errors/app-error";
+import {
+  Compra,
+  CrearCompraResultado,
+  MisComprasItem,
+} from "../interfaces/compra.interface";
+import { CompraRow, TipoCompra } from "../interfaces/pago.interface";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "../errors/app-error";
+import { centavosAPesos, pesosACentavos, toCentavos } from "../utils/money.util";
+import { catalogoService } from "./catalogo.service";
+import { pagoService } from "./pago.service";
+import { archivoService } from "./archivo.service";
 
-function mapCompra(row: any): Compra {
+type CompraConMaterial = Partial<CompraRow> &
+  Pick<CompraRow, "id" | "id_comprador" | "id_modelo" | "id_disenador"> & {
+    material_nombre?: string | null;
+  };
+
+function mapCompra(row: CompraConMaterial): Compra {
+  const monto =
+    row.monto_centavos === null || row.monto_centavos === undefined
+      ? null
+      : toCentavos(row.monto_centavos);
   return {
     id: row.id,
     idComprador: row.id_comprador,
     idModelo: row.id_modelo,
     idDisenador: row.id_disenador,
-    precioPagado: Number(row.precio_pagado),
-    fecha: row.fecha,
-    entregaConfirmada: row.entrega_confirmada,
-    entregadoEn: row.entregado_en,
-    fondosLiberados: row.fondos_liberados,
-    fondosLiberadosEn: row.fondos_liberados_en,
+    tipo: row.tipo as TipoCompra,
+    estado: row.estado as Compra["estado"],
+    montoCentavos: monto,
+    moneda: row.moneda ?? "ARS",
+    precioPagado: monto === null ? null : centavosAPesos(monto),
+    fecha: row.fecha as string,
+    pagadaEn: row.pagada_en ?? null,
+    entregaConfirmada: row.entrega_confirmada ?? false,
+    entregadoEn: row.entregado_en ?? null,
+    fondosLiberados: row.fondos_liberados ?? false,
+    fondosLiberadosEn: row.fondos_liberados_en ?? null,
+    material: row.material_nombre ?? null,
   };
 }
 
 export const compraService = {
-  async crear(disenoId: string, compradorId: string): Promise<Compra> {
+  // descarga: crea la compra 'pendiente_pago' y la preference de Checkout Pro.
+  // fabricacion: solo crea el ancla; el pago se inicia al cerrarse el trato
+  // (POST /compras/:id/pagar) con el precio final negociado.
+  async crear(
+    disenoId: string,
+    compradorId: string,
+    tipo: TipoCompra,
+    material?: string,
+  ): Promise<CrearCompraResultado> {
     const diseno = await disenoRepository.getById(disenoId);
     if (!diseno || diseno.eliminado_en) {
       throw new NotFoundError("Diseño no encontrado");
     }
 
+    if (tipo === "descarga" && diseno.disenador_id === compradorId) {
+      throw new ConflictError("No podés comprar tu propio diseño");
+    }
+
+    // El material, si se indica, debe ser uno de los materiales del diseño.
+    const materialElegido = material
+      ? await catalogoService.resolverMaterialDeDiseno(diseno.id, material)
+      : null;
+
     const compra = await compraRepository.create({
       idComprador: compradorId,
       idModelo: diseno.id,
       idDisenador: diseno.disenador_id,
-      precioPagado: Number(diseno.precio_base),
+      tipo,
+      montoCentavos: tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
+      materialId: materialElegido?.id ?? null,
     });
+    const mapped = mapCompra({ ...compra, material_nombre: materialElegido?.nombre });
 
-    return mapCompra(compra);
+    if (tipo === "fabricacion") {
+      return { compra: mapped, initPoint: null };
+    }
+    const { initPoint } = await pagoService.iniciarPago(compra.id, compradorId);
+    return { compra: mapped, initPoint };
+  },
+
+  // Reintento de pago (preference vencida o abandonada) de una compra 'pendiente_pago'.
+  async pagar(compraId: string, compradorId: string) {
+    return pagoService.iniciarPago(compraId, compradorId);
   },
 
   async misCompras(compradorId: string): Promise<MisComprasItem[]> {
     const rows = await compraRepository.getMisCompras(compradorId);
-    return rows.map((row: any) => ({
+    return rows.map((row) => ({
       ...mapCompra(row),
       ordenFabricacionId: row.orden_fabricacion_id ?? null,
       ordenFabricacionEstado: row.orden_fabricacion_estado ?? null,
@@ -45,7 +102,6 @@ export const compraService = {
         titulo: row.diseno_titulo,
         imagenUrl: row.diseno_imagen_url,
         formato: row.diseno_formato,
-        archivoUrl: row.diseno_archivo_url,
       },
     }));
   },
@@ -59,6 +115,15 @@ export const compraService = {
     if (row.id_comprador !== userId) {
       throw new ForbiddenError("No autorizado para descargar este archivo");
     }
-    return row.archivo_url;
+    // El archivo digital solo se entrega con el pago acreditado; la compra de fabricación
+    // no incluye el archivo (lo recibe el fabricante).
+    if (row.tipo !== "descarga") {
+      throw new ForbiddenError("Esta compra no incluye la descarga del archivo");
+    }
+    if (row.estado !== "pagada" && row.estado !== "completada") {
+      throw new ConflictError("El pago de esta compra todavía no fue acreditado");
+    }
+    // Redirige a una URL firmada de 5 min (R2) o a un host de la allowlist (legacy).
+    return (await archivoService.firmarUrl(row.archivo_url)).url;
   },
 };

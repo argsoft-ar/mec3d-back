@@ -1,17 +1,21 @@
 import pool from "../config/db.config";
+import { Db } from "../utils/transaction.util";
 
 export const chatRepository = {
-  async createConversacion(data: {
-    ordenFabricacionId: string;
-    compradorId: string;
-    fabricanteId: string;
-  }) {
+  async createConversacion(
+    data: {
+      ordenFabricacionId: string;
+      compradorId: string;
+      fabricanteId: string;
+    },
+    db: Db = pool,
+  ) {
     const query = `
       INSERT INTO conversaciones (orden_fabricacion_id, comprador_id, fabricante_id)
       VALUES ($1, $2, $3)
       RETURNING id, orden_fabricacion_id, comprador_id, fabricante_id, creado_en;
     `;
-    const result = await pool.query(query, [
+    const result = await db.query(query, [
       data.ordenFabricacionId,
       data.compradorId,
       data.fabricanteId,
@@ -25,9 +29,9 @@ export const chatRepository = {
     return result.rows[0] ?? null;
   },
 
-  async getByOrdenFabricacionId(ordenFabricacionId: string) {
+  async getByOrdenFabricacionId(ordenFabricacionId: string, db: Db = pool) {
     const query = `SELECT * FROM conversaciones WHERE orden_fabricacion_id = $1;`;
-    const result = await pool.query(query, [ordenFabricacionId]);
+    const result = await db.query(query, [ordenFabricacionId]);
     return result.rows[0] ?? null;
   },
 

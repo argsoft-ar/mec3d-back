@@ -24,6 +24,7 @@ export const uploadImage = async (
     const url = await uploadService.uploadImage(
       req.file.buffer,
       req.file.originalname,
+      req.user!.id,
     );
 
     res.status(200).json({
@@ -53,6 +54,7 @@ export const uploadModel = async (
     const url = await uploadService.uploadModel(
       req.file.buffer,
       req.file.originalname,
+      req.user!.id,
     );
 
     res.status(200).json({

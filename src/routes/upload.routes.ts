@@ -13,8 +13,8 @@ const router = Router();
 // Multer interceptará el campo 'imagen' del form-data.
 router.post(
   "/imagen",
-  uploadLimiter,
   authenticateToken,
+  uploadLimiter,
   uploadImageMiddleware.single("imagen"),
   uploadImage,
 );
@@ -23,8 +23,8 @@ router.post(
 // Multer interceptará el campo 'archivo' del form-data.
 router.post(
   "/modelo",
-  uploadLimiter,
   authenticateToken,
+  uploadLimiter,
   uploadModelMiddleware.single("archivo"),
   uploadModel,
 );
