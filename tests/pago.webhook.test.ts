@@ -76,7 +76,10 @@ jest.mock("../src/services/payout.provider", () => ({
   solicitarPayouts: jest.fn(),
 }));
 
-import { pagoService, MAX_REINTENTOS_WEBHOOK } from "../src/services/pago.service";
+import {
+  pagoService,
+  MAX_REINTENTOS_WEBHOOK,
+} from "../src/services/pago.service";
 import { getPayoutHoldDays } from "../src/utils/policy.util";
 import { compraRepository } from "../src/repositories/compra.repository";
 import { comisionRepository } from "../src/repositories/comision.repository";
@@ -143,12 +146,24 @@ function firmar(dataId: string, requestId: string) {
   return `ts=${ts},v1=${v1}`;
 }
 
-function webhook(over: { dataId?: string; type?: string; xSignature?: string; body?: unknown } = {}) {
+function webhook(
+  over: {
+    dataId?: string;
+    type?: string;
+    xSignature?: string;
+    body?: unknown;
+  } = {},
+) {
   const dataId = over.dataId ?? MP_ID;
   const type = over.type ?? "payment";
   return {
     query: { "data.id": dataId, type },
-    body: over.body ?? { id: 555, type, action: "payment.updated", data: { id: dataId } },
+    body: over.body ?? {
+      id: 555,
+      type,
+      action: "payment.updated",
+      data: { id: dataId },
+    },
     xSignature: over.xSignature ?? firmar(dataId, "req-1"),
     xRequestId: "req-1",
   };
@@ -157,11 +172,17 @@ function webhook(over: { dataId?: string; type?: string; xSignature?: string; bo
 beforeAll(() => {
   process.env.MP_ACCESS_TOKEN = "TEST-token";
   process.env.MP_WEBHOOK_SECRET = SECRET;
-  process.env.MP_NOTIFICATION_URL = "https://api.example.com/api/v1/webhooks/mercadopago";
+  process.env.MP_NOTIFICATION_URL =
+    "https://api.example.com/api/v1/webhooks/mercadopago";
   process.env.FRONTEND_URL = "https://front.example.com";
 });
 
-let insertados: { tipo: string; montoCentavos: number; estado: string; usuarioId: string | null }[];
+let insertados: {
+  tipo: string;
+  montoCentavos: number;
+  estado: string;
+  usuarioId: string | null;
+}[];
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -178,7 +199,10 @@ beforeEach(() => {
     moneda: p.moneda,
   }));
   mk(compraRepository.lockById).mockResolvedValue({ ...compraBase });
-  mk(comisionRepository.getConfig).mockResolvedValue({ plataformaBps: 1000, regaliaDisenadorBps: 300 });
+  mk(comisionRepository.getConfig).mockResolvedValue({
+    plataformaBps: 1000,
+    regaliaDisenadorBps: 300,
+  });
   mk(ordenFabricacionRepository.lockCerradaPorCompra).mockResolvedValue(null);
   mk(pagoRepository.lockByMpPaymentId).mockResolvedValue(null);
   mk(pagoRepository.lockById).mockResolvedValue({ ...pagoBase });
@@ -191,13 +215,18 @@ beforeEach(() => {
     return true;
   });
   mk(movimientoRepository.sumaDesglose).mockImplementation(async () =>
-    insertados.filter((m) => m.tipo !== "retencion").reduce((s, m) => s + m.montoCentavos, 0),
+    insertados
+      .filter((m) => m.tipo !== "retencion")
+      .reduce((s, m) => s + m.montoCentavos, 0),
   );
-  mk(movimientoRepository.liberarPorPago).mockResolvedValue([{ id: "mov-1", usuario_id: DISENADOR_ID }]);
+  mk(movimientoRepository.liberarPorPago).mockResolvedValue([
+    { id: "mov-1", usuario_id: DISENADOR_ID },
+  ]);
   mk(mockPaymentGet).mockResolvedValue(mpPayment());
 });
 
-const resuelto = () => mk(webhookEventoRepository.resolver).mock.calls[0]?.slice(2);
+const resuelto = () =>
+  mk(webhookEventoRepository.resolver).mock.calls[0]?.slice(2);
 
 // Deja listo el flujo post-commit de reembolso: el pago figura aprobado y MP acepta el refund.
 function prepararReembolso() {
@@ -206,13 +235,18 @@ function prepararReembolso() {
   mk(pagoRepository.getById).mockResolvedValue(aprobado);
   mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
   mk(movimientoRepository.existeRetencion).mockResolvedValue(false);
-  mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({ revertidos: 0, yaPagados: 0 });
+  mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({
+    revertidos: 0,
+    yaPagados: 0,
+  });
   mockRefundTotal.mockResolvedValue({ id: 31 });
 }
 
 describe("procesarWebhook: autenticidad", () => {
   it("firma inválida => 401, sin consultar a MP ni escribir nada", async () => {
-    const r = await pagoService.procesarWebhook(webhook({ xSignature: "ts=1,v1=00" }));
+    const r = await pagoService.procesarWebhook(
+      webhook({ xSignature: "ts=1,v1=00" }),
+    );
     expect(r).toEqual({ httpStatus: 401, resultado: "firma_invalida" });
     expect(mockPaymentGet).not.toHaveBeenCalled();
     expect(webhookEventoRepository.registrar).not.toHaveBeenCalled();
@@ -225,13 +259,17 @@ describe("procesarWebhook: autenticidad", () => {
       .createHmac("sha256", SECRET)
       .update(`id:${dataId};request-id:req-1;ts:${ts};`)
       .digest("hex");
-    const r = await pagoService.procesarWebhook(webhook({ xSignature: `ts=${ts},v1=${v1}` }));
+    const r = await pagoService.procesarWebhook(
+      webhook({ xSignature: `ts=${ts},v1=${v1}` }),
+    );
     expect(r.httpStatus).toBe(401);
     expect(mockPaymentGet).not.toHaveBeenCalled();
   });
 
   it("tipo distinto de payment => 200 ignorado sin consultar a MP", async () => {
-    const r = await pagoService.procesarWebhook(webhook({ type: "merchant_order" }));
+    const r = await pagoService.procesarWebhook(
+      webhook({ type: "merchant_order" }),
+    );
     expect(r).toEqual({ httpStatus: 200, resultado: "ignorado" });
     expect(mockPaymentGet).not.toHaveBeenCalled();
     expect(resuelto()).toEqual(["ignorado", "tipo_no_soportado"]);
@@ -243,12 +281,18 @@ describe("procesarWebhook: autenticidad", () => {
     });
 
     it("=> 503 reintentable, con contador por data.id y sin cerrar el evento", async () => {
-      mk(webhookEventoRepository.registrarReintento).mockResolvedValue({ id: "ev-r", intentos: 1 });
+      mk(webhookEventoRepository.registrarReintento).mockResolvedValue({
+        id: "ev-r",
+        intentos: 1,
+      });
       const r = await pagoService.procesarWebhook(webhook());
       expect(r).toEqual({ httpStatus: 503, resultado: "reintentable" });
       expect(webhookEventoRepository.registrarReintento).toHaveBeenCalledWith(
         mockClient,
-        expect.objectContaining({ eventoId: `pendiente:${MP_ID}`, dataId: MP_ID }),
+        expect.objectContaining({
+          eventoId: `pendiente:${MP_ID}`,
+          dataId: MP_ID,
+        }),
       );
       expect(webhookEventoRepository.registrar).not.toHaveBeenCalled();
       expect(webhookEventoRepository.resolver).not.toHaveBeenCalled();
@@ -289,7 +333,9 @@ describe("procesarWebhook: autenticidad", () => {
 
   it("un error de red de MP se propaga (500) para que MP reintente", async () => {
     mockPaymentGet.mockRejectedValue(new Error("timeout"));
-    await expect(pagoService.procesarWebhook(webhook())).rejects.toThrow("timeout");
+    await expect(pagoService.procesarWebhook(webhook())).rejects.toThrow(
+      "timeout",
+    );
     expect(webhookEventoRepository.registrar).not.toHaveBeenCalled();
     expect(webhookEventoRepository.registrarReintento).not.toHaveBeenCalled();
   });
@@ -298,9 +344,18 @@ describe("procesarWebhook: autenticidad", () => {
     await pagoService.procesarWebhook(webhook());
     insertados.length = 0;
     await pagoService.procesarWebhook(
-      webhook({ body: { id: 999, type: "payment", action: "otra.accion", data: { id: MP_ID } } }),
+      webhook({
+        body: {
+          id: 999,
+          type: "payment",
+          action: "otra.accion",
+          data: { id: MP_ID },
+        },
+      }),
     );
-    const ids = mk(webhookEventoRepository.registrar).mock.calls.map((c) => c[1].eventoId);
+    const ids = mk(webhookEventoRepository.registrar).mock.calls.map(
+      (c) => c[1].eventoId,
+    );
     expect(ids).toEqual([`mp:${MP_ID}:req-1`, `mp:${MP_ID}:req-1`]);
   });
 });
@@ -315,13 +370,20 @@ describe("procesarWebhook: idempotencia", () => {
   });
 
   it("pago ya aprobado (otra notificación del mismo pago) no duplica el ledger", async () => {
-    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({ ...pagoBase, mp_payment_id: MP_ID, estado: "aprobado" });
+    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({
+      ...pagoBase,
+      mp_payment_id: MP_ID,
+      estado: "aprobado",
+    });
     const r = await pagoService.procesarWebhook(webhook());
     expect(r.resultado).toBe("procesado");
     expect(resuelto()).toEqual(["procesado", "pago_ya_procesado"]);
     expect(movimientoRepository.insertar).not.toHaveBeenCalled();
     expect(compraRepository.marcarPagada).not.toHaveBeenCalled();
-    expect(webhookEventoRepository.cerrarReintentos).toHaveBeenCalledWith(mockClient, `pendiente:${MP_ID}`);
+    expect(webhookEventoRepository.cerrarReintentos).toHaveBeenCalledWith(
+      mockClient,
+      `pendiente:${MP_ID}`,
+    );
     // Pago ya acreditado: no hace falta re-consultar a MP.
     expect(mockPaymentGet).toHaveBeenCalledTimes(1);
   });
@@ -329,14 +391,24 @@ describe("procesarWebhook: idempotencia", () => {
 
 describe("procesarWebhook: validación del pago re-consultado", () => {
   it("consulta el pago por el data.id firmado, no por lo que diga el body", async () => {
-    await pagoService.procesarWebhook(webhook({ body: { id: 1, type: "payment", data: { id: "111" } } }));
+    await pagoService.procesarWebhook(
+      webhook({ body: { id: 1, type: "payment", data: { id: "111" } } }),
+    );
     expect(mockPaymentGet).toHaveBeenCalledWith({ id: MP_ID });
   });
 
   it.each([
     ["moneda distinta de ARS", { currency_id: "USD" }, "moneda_invalida:USD"],
-    ["monto distinto al de la compra", { transaction_amount: 1 }, "monto_distinto_al_esperado"],
-    ["monto con más de 2 decimales", { transaction_amount: 2500.001 }, "monto_invalido"],
+    [
+      "monto distinto al de la compra",
+      { transaction_amount: 1 },
+      "monto_distinto_al_esperado",
+    ],
+    [
+      "monto con más de 2 decimales",
+      { transaction_amount: 2500.001 },
+      "monto_invalido",
+    ],
   ])("rechaza %s (pago no aprobado)", async (_n, over, detalle) => {
     mockPaymentGet.mockResolvedValue(mpPayment({ ...over, status: "pending" }));
     const r = await pagoService.procesarWebhook(webhook());
@@ -348,9 +420,27 @@ describe("procesarWebhook: validación del pago re-consultado", () => {
 
   // Cobro aprobado en MP con moneda/monto que no corresponden: nunca acredita; se devuelve.
   it.each([
-    ["moneda distinta de ARS", { currency_id: "USD" }, "moneda_invalida", "USD", 250_000],
-    ["monto distinto al de la compra", { transaction_amount: 1 }, "monto_invalido", "ARS", 100],
-    ["monto con más de 2 decimales", { transaction_amount: 2500.001 }, "monto_invalido", "ARS", 250_000],
+    [
+      "moneda distinta de ARS",
+      { currency_id: "USD" },
+      "moneda_invalida",
+      "USD",
+      250_000,
+    ],
+    [
+      "monto distinto al de la compra",
+      { transaction_amount: 1 },
+      "monto_invalido",
+      "ARS",
+      100,
+    ],
+    [
+      "monto con más de 2 decimales",
+      { transaction_amount: 2500.001 },
+      "monto_invalido",
+      "ARS",
+      250_000,
+    ],
   ])(
     "%s aprobado => no acredita y se marca para reembolso",
     async (_n, over, motivo, moneda, centavos) => {
@@ -364,12 +454,22 @@ describe("procesarWebhook: validación del pago re-consultado", () => {
       expect(resuelto()).toEqual(["procesado", `pago_a_reembolsar:${motivo}`]);
       expect(pagoRepository.insertarDesdeMp).toHaveBeenCalledWith(
         mockClient,
-        expect.objectContaining({ moneda, montoCentavos: centavos, mpPaymentId: MP_ID }),
+        expect.objectContaining({
+          moneda,
+          montoCentavos: centavos,
+          mpPaymentId: MP_ID,
+        }),
       );
-      expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(mockClient, PAGO_ID, motivo);
+      expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(
+        mockClient,
+        PAGO_ID,
+        motivo,
+      );
       expect(compraRepository.marcarPagada).not.toHaveBeenCalled();
       expect(movimientoRepository.insertar).not.toHaveBeenCalled();
-      expect(mockRefundTotal).toHaveBeenCalledWith(expect.objectContaining({ payment_id: MP_ID }));
+      expect(mockRefundTotal).toHaveBeenCalledWith(
+        expect.objectContaining({ payment_id: MP_ID }),
+      );
     },
   );
 
@@ -404,24 +504,46 @@ describe("procesarWebhook: validación del pago re-consultado", () => {
     const r = await pagoService.procesarWebhook(webhook());
     expect(mockPaymentGet).toHaveBeenCalledTimes(2);
     expect(r.resultado).toBe("procesado");
-    expect(compraRepository.marcarPagada).toHaveBeenCalledWith(mockClient, COMPRA_ID);
+    expect(compraRepository.marcarPagada).toHaveBeenCalledWith(
+      mockClient,
+      COMPRA_ID,
+    );
   });
 
   it("refund parcial en MP => revisión admin, sin tocar el ledger", async () => {
     jest.spyOn(console, "error").mockImplementation(() => undefined);
-    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({ ...pagoBase, mp_payment_id: MP_ID, estado: "aprobado" });
-    mockPaymentGet.mockResolvedValue(mpPayment({ transaction_amount_refunded: 100 }));
+    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({
+      ...pagoBase,
+      mp_payment_id: MP_ID,
+      estado: "aprobado",
+    });
+    mockPaymentGet.mockResolvedValue(
+      mpPayment({ transaction_amount_refunded: 100 }),
+    );
     await pagoService.procesarWebhook(webhook());
-    expect(pagoRepository.marcarRevisionAdmin).toHaveBeenCalledWith(mockClient, PAGO_ID, "refund_parcial_en_mp");
+    expect(pagoRepository.marcarRevisionAdmin).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      "refund_parcial_en_mp",
+    );
     expect(movimientoRepository.insertar).not.toHaveBeenCalled();
-    expect(resuelto()).toEqual(["procesado", "pago_ya_procesado:refund_parcial_revision_admin"]);
+    expect(resuelto()).toEqual([
+      "procesado",
+      "pago_ya_procesado:refund_parcial_revision_admin",
+    ]);
   });
 
   it("ignora external_reference inválido o compra inexistente", async () => {
-    mockPaymentGet.mockResolvedValue(mpPayment({ external_reference: "no-es-uuid" }));
-    expect((await pagoService.procesarWebhook(webhook())).resultado).toBe("ignorado");
+    mockPaymentGet.mockResolvedValue(
+      mpPayment({ external_reference: "no-es-uuid" }),
+    );
+    expect((await pagoService.procesarWebhook(webhook())).resultado).toBe(
+      "ignorado",
+    );
 
-    jest.mocked(webhookEventoRepository.registrar).mockResolvedValue("evento-2");
+    jest
+      .mocked(webhookEventoRepository.registrar)
+      .mockResolvedValue("evento-2");
     mockPaymentGet.mockResolvedValue(mpPayment());
     mk(compraRepository.lockById).mockResolvedValue(null);
     const r = await pagoService.procesarWebhook(webhook());
@@ -436,7 +558,10 @@ describe("procesarWebhook: validación del pago re-consultado", () => {
     });
     const r = await pagoService.procesarWebhook(webhook());
     expect(r.resultado).toBe("rechazado");
-    expect(resuelto()).toEqual(["rechazado", "pago_inconsistente_con_la_compra"]);
+    expect(resuelto()).toEqual([
+      "rechazado",
+      "pago_inconsistente_con_la_compra",
+    ]);
   });
 });
 
@@ -445,18 +570,42 @@ describe("procesarWebhook: pago aprobado", () => {
     const r = await pagoService.procesarWebhook(webhook());
 
     expect(r).toEqual({ httpStatus: 200, resultado: "procesado" });
-    expect(pagoRepository.asignarMpPayment).toHaveBeenCalledWith(mockClient, PAGO_ID, MP_ID, expect.anything());
+    expect(pagoRepository.asignarMpPayment).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      MP_ID,
+      expect.anything(),
+    );
     expect(pagoRepository.marcarAprobado).toHaveBeenCalled();
-    expect(compraRepository.marcarPagada).toHaveBeenCalledWith(mockClient, COMPRA_ID);
+    expect(compraRepository.marcarPagada).toHaveBeenCalledWith(
+      mockClient,
+      COMPRA_ID,
+    );
 
     const porTipo = Object.fromEntries(insertados.map((m) => [m.tipo, m]));
     expect(porTipo.retencion.montoCentavos).toBe(250_000);
-    expect(porTipo.comision_plataforma).toMatchObject({ montoCentavos: 25_000, usuarioId: null });
-    expect(porTipo.pago_disenador).toMatchObject({ montoCentavos: 225_000, usuarioId: DISENADOR_ID });
+    expect(porTipo.comision_plataforma).toMatchObject({
+      montoCentavos: 25_000,
+      usuarioId: null,
+    });
+    expect(porTipo.pago_disenador).toMatchObject({
+      montoCentavos: 225_000,
+      usuarioId: DISENADOR_ID,
+    });
 
-    expect(movimientoRepository.liberarPorPago).toHaveBeenCalledWith(mockClient, PAGO_ID, getPayoutHoldDays());
-    expect(compraRepository.completar).toHaveBeenCalledWith(mockClient, COMPRA_ID, { entrega: false });
-    expect(solicitarPayouts).toHaveBeenCalledWith([{ id: "mov-1", usuario_id: DISENADOR_ID }]);
+    expect(movimientoRepository.liberarPorPago).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      getPayoutHoldDays(),
+    );
+    expect(compraRepository.completar).toHaveBeenCalledWith(
+      mockClient,
+      COMPRA_ID,
+      { entrega: false },
+    );
+    expect(solicitarPayouts).toHaveBeenCalledWith([
+      { id: "mov-1", usuario_id: DISENADOR_ID },
+    ]);
     expect(resuelto()).toEqual(["procesado", "pago_aprobado_liberado"]);
   });
 
@@ -477,7 +626,11 @@ describe("procesarWebhook: pago aprobado", () => {
       estado: "trato_cerrado",
       fabricante_id: FABRICANTE_ID,
     });
-    mk(pagoRepository.lockById).mockResolvedValue({ ...pagoBase, monto_centavos: "1000000", orden_id: ORDEN_ID });
+    mk(pagoRepository.lockById).mockResolvedValue({
+      ...pagoBase,
+      monto_centavos: "1000000",
+      orden_id: ORDEN_ID,
+    });
     mockPaymentGet.mockResolvedValue(mpPayment({ transaction_amount: 10000 }));
 
     const r = await pagoService.procesarWebhook(webhook());
@@ -485,8 +638,14 @@ describe("procesarWebhook: pago aprobado", () => {
     expect(r.resultado).toBe("procesado");
     const porTipo = Object.fromEntries(insertados.map((m) => [m.tipo, m]));
     expect(porTipo.comision_plataforma.montoCentavos).toBe(100_000);
-    expect(porTipo.regalia_disenador).toMatchObject({ montoCentavos: 27_000, usuarioId: DISENADOR_ID });
-    expect(porTipo.pago_fabricante).toMatchObject({ montoCentavos: 873_000, usuarioId: FABRICANTE_ID });
+    expect(porTipo.regalia_disenador).toMatchObject({
+      montoCentavos: 27_000,
+      usuarioId: DISENADOR_ID,
+    });
+    expect(porTipo.pago_fabricante).toMatchObject({
+      montoCentavos: 873_000,
+      usuarioId: FABRICANTE_ID,
+    });
     expect(insertados.every((m) => m.estado === "retenido")).toBe(true);
     expect(movimientoRepository.liberarPorPago).not.toHaveBeenCalled();
     expect(compraRepository.completar).not.toHaveBeenCalled();
@@ -496,12 +655,17 @@ describe("procesarWebhook: pago aprobado", () => {
 
   it("la invariante del ledger se verifica: si el desglose no cierra, se aborta (rollback)", async () => {
     mk(movimientoRepository.sumaDesglose).mockResolvedValue(1);
-    await expect(pagoService.procesarWebhook(webhook())).rejects.toThrow("Invariante del ledger violada");
+    await expect(pagoService.procesarWebhook(webhook())).rejects.toThrow(
+      "Invariante del ledger violada",
+    );
     expect(webhookEventoRepository.resolver).not.toHaveBeenCalled();
   });
 
   it("compra ya cancelada: el pago se marca para reembolso y se devuelve en MP", async () => {
-    mk(compraRepository.lockById).mockResolvedValue({ ...compraBase, estado: "cancelada" });
+    mk(compraRepository.lockById).mockResolvedValue({
+      ...compraBase,
+      estado: "cancelada",
+    });
     // 1ª lectura (vínculo por metadata.pago_id): pendiente; después (reembolsar): ya aprobado.
     mk(pagoRepository.lockById)
       .mockResolvedValueOnce({ ...pagoBase })
@@ -512,16 +676,27 @@ describe("procesarWebhook: pago aprobado", () => {
         estado: "aprobado",
       }));
     mockRefundTotal.mockResolvedValue({ id: 31 });
-    mk(pagoRepository.getById).mockResolvedValue({ ...pagoBase, mp_payment_id: MP_ID, estado: "aprobado" });
+    mk(pagoRepository.getById).mockResolvedValue({
+      ...pagoBase,
+      mp_payment_id: MP_ID,
+      estado: "aprobado",
+    });
     mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
     mk(movimientoRepository.existeRetencion).mockResolvedValue(false);
-    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({ revertidos: 0, yaPagados: 0 });
+    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({
+      revertidos: 0,
+      yaPagados: 0,
+    });
 
     await pagoService.procesarWebhook(webhook());
 
     expect(movimientoRepository.insertar).not.toHaveBeenCalled();
     expect(compraRepository.marcarPagada).not.toHaveBeenCalled();
-    expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(mockClient, PAGO_ID, "compra_cancelada");
+    expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      "compra_cancelada",
+    );
     expect(mockRefundTotal).toHaveBeenCalledWith({
       payment_id: MP_ID,
       requestOptions: { idempotencyKey: `mec3d-refund-${PAGO_ID}` },
@@ -530,13 +705,16 @@ describe("procesarWebhook: pago aprobado", () => {
 });
 
 describe("procesarWebhook: otros estados de MP", () => {
-  it.each(["rejected", "cancelled"])("%s marca el pago pendiente como rechazado", async (status) => {
-    mockPaymentGet.mockResolvedValue(mpPayment({ status }));
-    await pagoService.procesarWebhook(webhook());
-    expect(pagoRepository.marcarRechazado).toHaveBeenCalled();
-    expect(compraRepository.marcarPagada).not.toHaveBeenCalled();
-    expect(resuelto()).toEqual(["procesado", `pago_${status}`]);
-  });
+  it.each(["rejected", "cancelled"])(
+    "%s marca el pago pendiente como rechazado",
+    async (status) => {
+      mockPaymentGet.mockResolvedValue(mpPayment({ status }));
+      await pagoService.procesarWebhook(webhook());
+      expect(pagoRepository.marcarRechazado).toHaveBeenCalled();
+      expect(compraRepository.marcarPagada).not.toHaveBeenCalled();
+      expect(resuelto()).toEqual(["procesado", `pago_${status}`]);
+    },
+  );
 
   it("in_process solo registra el estado intermedio", async () => {
     mockPaymentGet.mockResolvedValue(mpPayment({ status: "in_process" }));
@@ -545,36 +723,70 @@ describe("procesarWebhook: otros estados de MP", () => {
     expect(pagoRepository.marcarAprobado).not.toHaveBeenCalled();
   });
 
-  it.each(["refunded", "charged_back"])("%s revierte ledger y compra de un pago aprobado", async (status) => {
-    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({ ...pagoBase, mp_payment_id: MP_ID, estado: "aprobado" });
-    mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
-    mk(movimientoRepository.existeRetencion).mockResolvedValue(true);
-    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({ revertidos: 3, yaPagados: 0 });
-    mk(compraRepository.marcarReembolsada).mockResolvedValue(true);
-    mk(ordenFabricacionRepository.cancelarCerradaPorCompra).mockResolvedValue(1);
-    mockPaymentGet.mockResolvedValue(mpPayment({ status }));
+  it.each(["refunded", "charged_back"])(
+    "%s revierte ledger y compra de un pago aprobado",
+    async (status) => {
+      mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({
+        ...pagoBase,
+        mp_payment_id: MP_ID,
+        estado: "aprobado",
+      });
+      mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
+      mk(movimientoRepository.existeRetencion).mockResolvedValue(true);
+      mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({
+        revertidos: 3,
+        yaPagados: 0,
+      });
+      mk(compraRepository.marcarReembolsada).mockResolvedValue(true);
+      mk(ordenFabricacionRepository.cancelarCerradaPorCompra).mockResolvedValue(
+        1,
+      );
+      mockPaymentGet.mockResolvedValue(mpPayment({ status }));
 
-    await pagoService.procesarWebhook(webhook());
+      await pagoService.procesarWebhook(webhook());
 
-    expect(movimientoRepository.reembolsarPorPago).toHaveBeenCalledWith(mockClient, PAGO_ID);
-    expect(movimientoRepository.insertarReembolso).toHaveBeenCalledWith(
-      mockClient,
-      expect.objectContaining({ pagoId: PAGO_ID, compradorId: COMPRADOR_ID, montoCentavos: 250_000 }),
-    );
-    expect(compraRepository.marcarReembolsada).toHaveBeenCalledWith(mockClient, COMPRA_ID);
-    expect(ordenFabricacionRepository.cancelarCerradaPorCompra).toHaveBeenCalledWith(mockClient, COMPRA_ID);
-    expect(resuelto()).toEqual(["procesado", status]);
-  });
+      expect(movimientoRepository.reembolsarPorPago).toHaveBeenCalledWith(
+        mockClient,
+        PAGO_ID,
+      );
+      expect(movimientoRepository.insertarReembolso).toHaveBeenCalledWith(
+        mockClient,
+        expect.objectContaining({
+          pagoId: PAGO_ID,
+          compradorId: COMPRADOR_ID,
+          montoCentavos: 250_000,
+        }),
+      );
+      expect(compraRepository.marcarReembolsada).toHaveBeenCalledWith(
+        mockClient,
+        COMPRA_ID,
+      );
+      expect(
+        ordenFabricacionRepository.cancelarCerradaPorCompra,
+      ).toHaveBeenCalledWith(mockClient, COMPRA_ID);
+      expect(resuelto()).toEqual(["procesado", status]);
+    },
+  );
 
   it("refund con payouts ya pagados pide revisión manual", async () => {
-    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({ ...pagoBase, mp_payment_id: MP_ID, estado: "aprobado" });
+    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({
+      ...pagoBase,
+      mp_payment_id: MP_ID,
+      estado: "aprobado",
+    });
     mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
     mk(movimientoRepository.existeRetencion).mockResolvedValue(true);
-    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({ revertidos: 1, yaPagados: 2 });
+    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({
+      revertidos: 1,
+      yaPagados: 2,
+    });
     mockPaymentGet.mockResolvedValue(mpPayment({ status: "refunded" }));
 
     await pagoService.procesarWebhook(webhook());
-    expect(resuelto()).toEqual(["procesado", "refunded:requiere_revision_manual_payouts_pagados=2"]);
+    expect(resuelto()).toEqual([
+      "procesado",
+      "refunded:requiere_revision_manual_payouts_pagados=2",
+    ]);
     expect(pagoRepository.marcarRevisionAdmin).toHaveBeenCalledWith(
       mockClient,
       PAGO_ID,
@@ -592,8 +804,15 @@ describe("reembolsar", () => {
     mk(pagoRepository.getById).mockResolvedValue(aprobado);
     mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
     mk(movimientoRepository.existeRetencion).mockResolvedValue(true);
-    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({ revertidos: 3, yaPagados: 0 });
-    mk(compraRepository.lockById).mockResolvedValue({ ...compraBase, estado: "cancelada", tipo: "fabricacion" });
+    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({
+      revertidos: 3,
+      yaPagados: 0,
+    });
+    mk(compraRepository.lockById).mockResolvedValue({
+      ...compraBase,
+      estado: "cancelada",
+      tipo: "fabricacion",
+    });
   });
 
   it("persiste la intención, llama a MP con idempotency key y cierra el ledger", async () => {
@@ -601,11 +820,23 @@ describe("reembolsar", () => {
     const r = await pagoService.reembolsar(PAGO_ID, "cancelacion_orden");
 
     expect(r).toBe("reembolsado");
-    expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(mockClient, PAGO_ID, "cancelacion_orden");
+    expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      "cancelacion_orden",
+    );
     expect(mockRefundTotal).toHaveBeenCalledTimes(1);
-    expect(pagoRepository.marcarReembolsado).toHaveBeenCalledWith(mockClient, PAGO_ID, "77", "refunded");
+    expect(pagoRepository.marcarReembolsado).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      "77",
+      "refunded",
+    );
     expect(movimientoRepository.insertarReembolso).toHaveBeenCalledTimes(1);
-    expect(compraRepository.marcarReembolsada).toHaveBeenCalledWith(mockClient, COMPRA_ID);
+    expect(compraRepository.marcarReembolsada).toHaveBeenCalledWith(
+      mockClient,
+      COMPRA_ID,
+    );
   });
 
   it("si MP falla queda 'pendiente' (reintentable) y no toca el ledger", async () => {
@@ -630,13 +861,21 @@ describe("reembolsar", () => {
   });
 
   it("es idempotente: un pago ya reembolsado no vuelve a llamar a MP", async () => {
-    mk(pagoRepository.lockById).mockResolvedValue({ ...aprobado, estado: "reembolsado" });
+    mk(pagoRepository.lockById).mockResolvedValue({
+      ...aprobado,
+      estado: "reembolsado",
+    });
     expect(await pagoService.reembolsar(PAGO_ID)).toBe("reembolsado");
     expect(mockRefundTotal).not.toHaveBeenCalled();
   });
 
   it("no reembolsa un pago que no está aprobado", async () => {
-    mk(pagoRepository.lockById).mockResolvedValue({ ...pagoBase, estado: "pendiente" });
-    await expect(pagoService.reembolsar(PAGO_ID)).rejects.toThrow("Solo se puede reembolsar un pago aprobado");
+    mk(pagoRepository.lockById).mockResolvedValue({
+      ...pagoBase,
+      estado: "pendiente",
+    });
+    await expect(pagoService.reembolsar(PAGO_ID)).rejects.toThrow(
+      "Solo se puede reembolsar un pago aprobado",
+    );
   });
 });

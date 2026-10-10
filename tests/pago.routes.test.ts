@@ -1,7 +1,8 @@
 process.env.JWT_SECRET ??= "test-jwt-secret-para-tests";
 process.env.MP_ACCESS_TOKEN = "TEST-token";
 process.env.MP_WEBHOOK_SECRET = "secreto-webhook-de-prueba";
-process.env.MP_NOTIFICATION_URL = "https://api.example.com/api/v1/webhooks/mercadopago";
+process.env.MP_NOTIFICATION_URL =
+  "https://api.example.com/api/v1/webhooks/mercadopago";
 process.env.FRONTEND_URL = "https://front.example.com";
 
 const mockFindById = jest.fn();
@@ -38,7 +39,9 @@ describe("POST /api/v1/webhooks/mercadopago", () => {
   });
 
   it("sin headers de firma también es 401 (no 500)", async () => {
-    const res = await request(app).post("/api/v1/webhooks/mercadopago").send({});
+    const res = await request(app)
+      .post("/api/v1/webhooks/mercadopago")
+      .send({});
     expect(res.status).toBe(401);
   });
 });

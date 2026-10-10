@@ -263,12 +263,7 @@ export const ordenFabricacionRepository = {
   // ── Disputas ─────────────────────────────────────────────────────────────
   // El comprador congela los fondos: mientras la orden está 'en_disputa' no se puede confirmar
   // la entrega, cancelar ni descargar el archivo.
-  async abrirDisputa(
-    db: Db,
-    id: string,
-    compradorId: string,
-    motivo: string,
-  ) {
+  async abrirDisputa(db: Db, id: string, compradorId: string, motivo: string) {
     const result = await db.query(
       `UPDATE ordenes_fabricacion
        SET estado = 'en_disputa', disputa_motivo = $3, disputa_abierta_por = $2,

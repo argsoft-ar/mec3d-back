@@ -11,7 +11,11 @@ import {
   ForbiddenError,
   NotFoundError,
 } from "../errors/app-error";
-import { centavosAPesos, pesosACentavos, toCentavos } from "../utils/money.util";
+import {
+  centavosAPesos,
+  pesosACentavos,
+  toCentavos,
+} from "../utils/money.util";
 import { catalogoService } from "./catalogo.service";
 import { pagoService } from "./pago.service";
 import { archivoService } from "./archivo.service";
@@ -75,10 +79,14 @@ export const compraService = {
       idModelo: diseno.id,
       idDisenador: diseno.disenador_id,
       tipo,
-      montoCentavos: tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
+      montoCentavos:
+        tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
       materialId: materialElegido?.id ?? null,
     });
-    const mapped = mapCompra({ ...compra, material_nombre: materialElegido?.nombre });
+    const mapped = mapCompra({
+      ...compra,
+      material_nombre: materialElegido?.nombre,
+    });
 
     if (tipo === "fabricacion") {
       return { compra: mapped, initPoint: null };
@@ -118,10 +126,14 @@ export const compraService = {
     // El archivo digital solo se entrega con el pago acreditado; la compra de fabricación
     // no incluye el archivo (lo recibe el fabricante).
     if (row.tipo !== "descarga") {
-      throw new ForbiddenError("Esta compra no incluye la descarga del archivo");
+      throw new ForbiddenError(
+        "Esta compra no incluye la descarga del archivo",
+      );
     }
     if (row.estado !== "pagada" && row.estado !== "completada") {
-      throw new ConflictError("El pago de esta compra todavía no fue acreditado");
+      throw new ConflictError(
+        "El pago de esta compra todavía no fue acreditado",
+      );
     }
     // Redirige a una URL firmada de 5 min (R2) o a un host de la allowlist (legacy).
     return (await archivoService.firmarUrl(row.archivo_url)).url;

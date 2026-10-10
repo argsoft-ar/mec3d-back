@@ -62,7 +62,9 @@ export const confirmarEntregaLimiter = rateLimit({
 export const codigoEntregaLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 30,
-  message: { error: "Demasiadas consultas del código de entrega, intente más tarde" },
+  message: {
+    error: "Demasiadas consultas del código de entrega, intente más tarde",
+  },
   standardHeaders: true,
   keyGenerator: userKeyGenerator,
   legacyHeaders: false,

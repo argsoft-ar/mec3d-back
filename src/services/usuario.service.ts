@@ -73,7 +73,11 @@ export const usuarioService = {
     return userRepository.getMaterialesFabricante(userId);
   },
 
-  async getFabricantesCercanos(zonaId: number | undefined, page: number, limit: number) {
+  async getFabricantesCercanos(
+    zonaId: number | undefined,
+    page: number,
+    limit: number,
+  ) {
     const provinciaPrefix = zonaId != null ? getProvinciaPrefix(zonaId) : null;
     return userRepository.getFabricantesCercanos(
       zonaId ?? null,
@@ -144,10 +148,13 @@ function mapUserRow(row: any) {
     zonaId: row.zona_id,
     puntuacion: Number.parseFloat(row.puntuacion) || 0,
     cuentaMercadopago: row.cuenta_mercadopago,
-    cuentaMercadopagoEnCooldown: cuentaEnCooldown(row.cuenta_mercadopago_actualizada_en),
-    cuentaMercadopagoHabilitadaDesde: cuentaHabilitadaDesde(
+    cuentaMercadopagoEnCooldown: cuentaEnCooldown(
       row.cuenta_mercadopago_actualizada_en,
-    )?.toISOString() ?? null,
+    ),
+    cuentaMercadopagoHabilitadaDesde:
+      cuentaHabilitadaDesde(
+        row.cuenta_mercadopago_actualizada_en,
+      )?.toISOString() ?? null,
     tagline: row.tagline,
     descripcion: row.descripcion,
     experiencia: row.experiencia,

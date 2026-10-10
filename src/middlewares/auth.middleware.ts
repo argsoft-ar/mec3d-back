@@ -37,7 +37,9 @@ export const requireAdmin = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const usuario = req.user ? await userRepository.findById(req.user.id) : null;
+    const usuario = req.user
+      ? await userRepository.findById(req.user.id)
+      : null;
     if (usuario?.rol_principal !== "admin") {
       res.status(403).json({ error: "Acceso denegado" });
       return;

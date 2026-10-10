@@ -13,7 +13,9 @@ export const comisionRepository = {
     const plataformaBps = porClave.get("plataforma");
     const regaliaDisenadorBps = porClave.get("regalia_disenador");
     if (plataformaBps === undefined || regaliaDisenadorBps === undefined) {
-      throw new Error("Falta configuración de comisiones (configuracion_comisiones)");
+      throw new Error(
+        "Falta configuración de comisiones (configuracion_comisiones)",
+      );
     }
     return { plataformaBps, regaliaDisenadorBps };
   },

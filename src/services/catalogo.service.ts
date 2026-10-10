@@ -16,7 +16,9 @@ function resolverNombres<T extends { id: number; nombre: string }>(
   encontrados: T[],
   etiqueta: string,
 ): T[] {
-  const porNombre = new Map(encontrados.map((r) => [r.nombre.toLowerCase(), r]));
+  const porNombre = new Map(
+    encontrados.map((r) => [r.nombre.toLowerCase(), r]),
+  );
   const inexistentes: string[] = [];
   const resueltos = new Map<number, T>();
   for (const nombre of nombres) {
@@ -46,7 +48,9 @@ export const catalogoService = {
     }));
   },
 
-  async resolverTecnologias(nombres: string[]): Promise<TecnologiaCatalogoRow[]> {
+  async resolverTecnologias(
+    nombres: string[],
+  ): Promise<TecnologiaCatalogoRow[]> {
     if (nombres.length === 0) return [];
     const encontrados = await catalogoRepository.findTecnologiasByNombres(
       nombres.map((n) => n.trim()),
@@ -60,16 +64,24 @@ export const catalogoService = {
   },
 
   // Devuelve el id de la categoría existente; 400 si no existe (no se crean categorías).
-  async resolverCategoriaId(nombre: string | null | undefined): Promise<number | null> {
+  async resolverCategoriaId(
+    nombre: string | null | undefined,
+  ): Promise<number | null> {
     if (!nombre) return null;
-    const categoria = await catalogoRepository.findCategoriaByNombre(nombre.trim());
+    const categoria = await catalogoRepository.findCategoriaByNombre(
+      nombre.trim(),
+    );
     if (!categoria) {
-      throw new ValidationError(`Categoría inexistente en el catálogo: ${nombre}`);
+      throw new ValidationError(
+        `Categoría inexistente en el catálogo: ${nombre}`,
+      );
     }
     return categoria.id;
   },
 
-  async getMaterialesDeDiseno(disenoId: string): Promise<MaterialCatalogoRow[]> {
+  async getMaterialesDeDiseno(
+    disenoId: string,
+  ): Promise<MaterialCatalogoRow[]> {
     return catalogoRepository.getMaterialesDeDiseno(disenoId);
   },
 

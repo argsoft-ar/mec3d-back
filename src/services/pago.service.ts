@@ -18,7 +18,10 @@ import { disenoRepository } from "../repositories/diseno.repository";
 import { ordenFabricacionRepository } from "../repositories/orden-fabricacion.repository";
 import { DatosMpPago, pagoRepository } from "../repositories/pago.repository";
 import { movimientoRepository } from "../repositories/movimiento.repository";
-import { webhookEventoRepository, NuevoWebhookEvento } from "../repositories/webhook-evento.repository";
+import {
+  webhookEventoRepository,
+  NuevoWebhookEvento,
+} from "../repositories/webhook-evento.repository";
 import {
   webhookNotificationSchema,
   webhookQuerySchema,
@@ -30,7 +33,11 @@ import {
   NotFoundError,
 } from "../errors/app-error";
 import { construirMovimientos } from "../utils/ledger.util";
-import { centavosAPesos, pesosACentavos, toCentavos } from "../utils/money.util";
+import {
+  centavosAPesos,
+  pesosACentavos,
+  toCentavos,
+} from "../utils/money.util";
 import { verificarFirmaMercadoPago } from "../utils/mp-signature.util";
 import { getPayoutHoldDays } from "../utils/policy.util";
 import { withTransaction } from "../utils/transaction.util";
@@ -156,7 +163,12 @@ async function resolverPagoLocal(
         hint.mp_payment_id === null &&
         toCentavos(hint.monto_centavos) === montoCentavos
       ) {
-        await pagoRepository.asignarMpPayment(client, hint.id, mpPaymentId, datos);
+        await pagoRepository.asignarMpPayment(
+          client,
+          hint.id,
+          mpPaymentId,
+          datos,
+        );
         return { ...hint, mp_payment_id: mpPaymentId };
       }
     }
@@ -190,7 +202,10 @@ async function aplicarReembolsoLocal(
   );
   if (!marcado) return { yaPagados: 0 };
 
-  const esPrincipal = await movimientoRepository.existeRetencion(client, pago.id);
+  const esPrincipal = await movimientoRepository.existeRetencion(
+    client,
+    pago.id,
+  );
   const { yaPagados } = await movimientoRepository.reembolsarPorPago(
     client,
     pago.id,
@@ -208,7 +223,10 @@ async function aplicarReembolsoLocal(
 
   if (esPrincipal) {
     await compraRepository.marcarReembolsada(client, compra.id);
-    await ordenFabricacionRepository.cancelarCerradaPorCompra(client, compra.id);
+    await ordenFabricacionRepository.cancelarCerradaPorCompra(
+      client,
+      compra.id,
+    );
   }
   if (yaPagados > 0) {
     // Payouts ya transferidos a vendedores: son irreversibles desde acá. Queda auditado.
@@ -321,7 +339,9 @@ async function aprobarPago(
       pago.id,
       getPayoutHoldDays(),
     );
-    if (!(await compraRepository.completar(client, compra.id, { entrega: false }))) {
+    if (
+      !(await compraRepository.completar(client, compra.id, { entrega: false }))
+    ) {
       throw new Error(`No se pudo completar la compra ${compra.id}`);
     }
     return resultado("procesado", "pago_aprobado_liberado", { liberados });
@@ -349,8 +369,11 @@ async function registrarCobroInvalido(
   montoCentavos: number | null,
 ): Promise<ResultadoAplicacion> {
   const mpPaymentId = String(payment.id);
-  const moneda = /^[A-Z]{3}$/.test(payment.currency_id ?? "") ? (payment.currency_id as string) : null;
-  const centavos = montoCentavos ?? aproximarCentavos(payment.transaction_amount);
+  const moneda = /^[A-Z]{3}$/.test(payment.currency_id ?? "")
+    ? (payment.currency_id as string)
+    : null;
+  const centavos =
+    montoCentavos ?? aproximarCentavos(payment.transaction_amount);
   if (!moneda || centavos === null) {
     alertar(
       `pago ${mpPaymentId} aprobado en MP con moneda/monto ilegibles (compra ${compra.id}): reembolsar manualmente`,
@@ -385,7 +408,9 @@ async function registrarCobroInvalido(
   alertar(
     `pago ${pago.id} (compra ${compra.id}) cobrado con ${motivo} (${moneda} ${centavos} centavos): se reembolsa automáticamente`,
   );
-  return resultado("procesado", `pago_a_reembolsar:${motivo}`, { reembolsar: [pago.id] });
+  return resultado("procesado", `pago_a_reembolsar:${motivo}`, {
+    reembolsar: [pago.id],
+  });
 }
 
 // Función transaccional única de aplicación de un pago de MP: la usan el webhook y la
@@ -426,8 +451,12 @@ async function aplicarPagoMp(
     if (payment.status === "approved") {
       return registrarCobroInvalido(client, compra, payment, motivo, montoMp);
     }
-    if (!monedaOk) return resultado("rechazado", `moneda_invalida:${payment.currency_id}`);
-    return resultado("rechazado", montoMp === null ? "monto_invalido" : "monto_distinto_al_esperado");
+    if (!monedaOk)
+      return resultado("rechazado", `moneda_invalida:${payment.currency_id}`);
+    return resultado(
+      "rechazado",
+      montoMp === null ? "monto_invalido" : "monto_distinto_al_esperado",
+    );
   }
   const montoCentavos = montoMp as number;
   const mpPaymentId = String(payment.id);
@@ -439,7 +468,10 @@ async function aplicarPagoMp(
 
   let pago = await pagoRepository.lockByMpPaymentId(client, mpPaymentId);
   if (pago) {
-    if (pago.compra_id !== compra.id || toCentavos(pago.monto_centavos) !== montoCentavos) {
+    if (
+      pago.compra_id !== compra.id ||
+      toCentavos(pago.monto_centavos) !== montoCentavos
+    ) {
       return resultado("rechazado", "pago_inconsistente_con_la_compra");
     }
   } else {
@@ -493,7 +525,13 @@ async function aplicarPagoMp(
     case "charged_back": {
       const status = payment.status;
       if (pago.estado === "aprobado") {
-        const { yaPagados } = await aplicarReembolsoLocal(client, compra, pago, null, status);
+        const { yaPagados } = await aplicarReembolsoLocal(
+          client,
+          compra,
+          pago,
+          null,
+          status,
+        );
         r = resultado(
           "procesado",
           yaPagados > 0
@@ -520,8 +558,16 @@ async function aplicarPagoMp(
 
   // Refund parcial hecho en MP (el estado sigue 'approved'): el ledger no lo refleja solo.
   const devuelto = payment.transaction_amount_refunded ?? 0;
-  if (devuelto > 0 && payment.status !== "refunded" && payment.status !== "charged_back") {
-    await pagoRepository.marcarRevisionAdmin(client, pago.id, "refund_parcial_en_mp");
+  if (
+    devuelto > 0 &&
+    payment.status !== "refunded" &&
+    payment.status !== "charged_back"
+  ) {
+    await pagoRepository.marcarRevisionAdmin(
+      client,
+      pago.id,
+      "refund_parcial_en_mp",
+    );
     alertar(
       `el pago ${pago.id} (compra ${compra.id}) tiene un refund parcial en MP (${devuelto}): revisión manual`,
     );
@@ -532,7 +578,9 @@ async function aplicarPagoMp(
 
 // Efectos posteriores al commit: reembolsos automáticos y pedido de payouts. Un fallo acá
 // nunca revierte lo ya aplicado (los reembolsos pendientes los reintenta el scheduler).
-async function completarPostCommit(aplicado: ResultadoAplicacion): Promise<void> {
+async function completarPostCommit(
+  aplicado: ResultadoAplicacion,
+): Promise<void> {
   for (const pagoId of aplicado.reembolsar) {
     try {
       await pagoService.reembolsar(pagoId, "pago_no_vigente");
@@ -553,7 +601,10 @@ function eventoIdReintento(dataId: string): string {
 
 // El evento_id sale solo de campos firmados por MP (data.id y x-request-id); el body y la
 // query (type/action) no están firmados y no participan. Se acota a 100 caracteres (columna).
-export function construirEventoId(dataId: string | undefined, requestId: string | undefined): string {
+export function construirEventoId(
+  dataId: string | undefined,
+  requestId: string | undefined,
+): string {
   const raw = `mp:${dataId ?? "?"}:${requestId ?? "?"}`;
   return raw.length <= 100
     ? raw
@@ -594,7 +645,9 @@ export const pagoService = {
           );
         }
         if (pesosACentavos(orden.precio_acordado) !== monto) {
-          throw new ConflictError("El monto de la compra no coincide con el trato");
+          throw new ConflictError(
+            "El monto de la compra no coincide con el trato",
+          );
         }
         ordenId = orden.id;
       }
@@ -636,7 +689,9 @@ export const pagoService = {
           metadata: { pago_id: pago.id, compra_id: compra.id },
           expires: true,
           expiration_date_from: new Date(ahora).toISOString(),
-          expiration_date_to: new Date(ahora + EXPIRACION_PREFERENCE_MS).toISOString(),
+          expiration_date_to: new Date(
+            ahora + EXPIRACION_PREFERENCE_MS,
+          ).toISOString(),
         },
         requestOptions: { idempotencyKey: `mec3d-pref-${pago.id}` },
       });
@@ -677,7 +732,9 @@ export const pagoService = {
       tipo: compra.tipo,
       estadoCompra: compra.estado,
       montoCentavos:
-        compra.monto_centavos === null ? null : toCentavos(compra.monto_centavos),
+        compra.monto_centavos === null
+          ? null
+          : toCentavos(compra.monto_centavos),
       moneda: compra.moneda,
       pago: pago ? mapPagoResumen(pago) : null,
     };
@@ -694,7 +751,8 @@ export const pagoService = {
     const b = bodyParsed.success ? bodyParsed.data : {};
 
     const dataId =
-      q["data.id"] ?? (b.data?.id !== undefined ? String(b.data.id) : undefined);
+      q["data.id"] ??
+      (b.data?.id !== undefined ? String(b.data.id) : undefined);
 
     const firma = verificarFirmaMercadoPago({
       xSignature: req.xSignature,
@@ -721,7 +779,12 @@ export const pagoService = {
       await withTransaction(async (client) => {
         const id = await webhookEventoRepository.registrar(client, evento);
         if (id) {
-          await webhookEventoRepository.resolver(client, id, "ignorado", "tipo_no_soportado");
+          await webhookEventoRepository.resolver(
+            client,
+            id,
+            "ignorado",
+            "tipo_no_soportado",
+          );
         }
       });
       return { httpStatus: 200, resultado: "ignorado" };
@@ -746,9 +809,17 @@ export const pagoService = {
       const eventoId = await webhookEventoRepository.registrar(client, evento);
       if (!eventoId) return null;
       const r = await aplicarPagoMp(client, payment, refetch);
-      await webhookEventoRepository.resolver(client, eventoId, r.estado, r.detalle);
+      await webhookEventoRepository.resolver(
+        client,
+        eventoId,
+        r.estado,
+        r.detalle,
+      );
       // Si antes MP no exponía este pago (404), el contador de reintentos ya no aplica.
-      await webhookEventoRepository.cerrarReintentos(client, eventoIdReintento(dataId));
+      await webhookEventoRepository.cerrarReintentos(
+        client,
+        eventoIdReintento(dataId),
+      );
       return r;
     });
 
@@ -776,7 +847,11 @@ export const pagoService = {
 
     if (reintento.intentos > MAX_REINTENTOS_WEBHOOK) {
       await withTransaction((client) =>
-        webhookEventoRepository.agotarReintentos(client, reintento.id, "reintentos_agotados"),
+        webhookEventoRepository.agotarReintentos(
+          client,
+          reintento.id,
+          "reintentos_agotados",
+        ),
       );
       console.warn(
         `⚠️  Webhook del pago ${dataId}: sin disponibilidad en MP tras ${MAX_REINTENTOS_WEBHOOK} reintentos, se descarta`,
@@ -789,10 +864,16 @@ export const pagoService = {
   // Compras 'pendiente_pago' con preference reciente: se consulta a MP por external_reference
   // (por si se perdió el webhook) y se acreditan los pagos aprobados con la misma función
   // transaccional que usa el webhook (aplicarPagoMp). Idempotente.
-  async reconciliarPagosPendientes(limite = 50): Promise<ResumenReconciliacion> {
+  async reconciliarPagosPendientes(
+    limite = 50,
+  ): Promise<ResumenReconciliacion> {
     const compraIds = await pagoRepository.listarComprasParaReconciliar(limite);
     const { payment } = getMercadoPagoClients();
-    const resumen: ResumenReconciliacion = { revisadas: compraIds.length, acreditados: 0, errores: 0 };
+    const resumen: ResumenReconciliacion = {
+      revisadas: compraIds.length,
+      acreditados: 0,
+      errores: 0,
+    };
 
     for (const compraId of compraIds) {
       try {
@@ -807,10 +888,15 @@ export const pagoService = {
         });
         for (const encontrado of busqueda.results ?? []) {
           if (encontrado.id === undefined || encontrado.id === null) continue;
-          const completo = (await payment.get({ id: String(encontrado.id) })) as MpPayment;
-          const aplicado = await withTransaction((client) => aplicarPagoMp(client, completo));
+          const completo = (await payment.get({
+            id: String(encontrado.id),
+          })) as MpPayment;
+          const aplicado = await withTransaction((client) =>
+            aplicarPagoMp(client, completo),
+          );
           await completarPostCommit(aplicado);
-          if (aplicado.detalle.startsWith("pago_aprobado")) resumen.acreditados++;
+          if (aplicado.detalle.startsWith("pago_aprobado"))
+            resumen.acreditados++;
         }
       } catch (error) {
         resumen.errores++;
@@ -829,11 +915,17 @@ export const pagoService = {
     client: PoolClient,
     compraId: string,
   ): Promise<MovimientoRow[]> {
-    const pago = await pagoRepository.lockAprobadoPrincipalPorCompra(client, compraId);
+    const pago = await pagoRepository.lockAprobadoPrincipalPorCompra(
+      client,
+      compraId,
+    );
     if (!pago) {
       throw new ConflictError("No hay un pago aprobado con fondos retenidos");
     }
-    const liberados = await movimientoRepository.liberarPorPago(client, pago.id);
+    const liberados = await movimientoRepository.liberarPorPago(
+      client,
+      pago.id,
+    );
     if (liberados.length === 0) {
       throw new ConflictError("Los fondos de esta compra ya fueron liberados");
     }
@@ -847,7 +939,10 @@ export const pagoService = {
   async reembolsarConDetalle(
     pagoId: string,
     motivo = "reembolso_solicitado",
-  ): Promise<{ resultado: Exclude<ResultadoReembolso, "no_aplica">; yaPagados: number }> {
+  ): Promise<{
+    resultado: Exclude<ResultadoReembolso, "no_aplica">;
+    yaPagados: number;
+  }> {
     const inicial = await withTransaction(async (client) => {
       const pago = await pagoRepository.lockById(client, pagoId);
       if (!pago) throw new NotFoundError("Pago no encontrado");
@@ -861,7 +956,10 @@ export const pagoService = {
       return pago;
     });
     if (inicial.estado === "reembolsado") {
-      return { resultado: "reembolsado", yaPagados: inicial.payouts_pagados_al_reembolsar ?? 0 };
+      return {
+        resultado: "reembolsado",
+        yaPagados: inicial.payouts_pagados_al_reembolsar ?? 0,
+      };
     }
 
     const mpPaymentId = inicial.mp_payment_id as string;
@@ -894,7 +992,9 @@ export const pagoService = {
       const compra = await compraRepository.lockById(client, fila.compra_id);
       const pago = await pagoRepository.lockById(client, pagoId);
       if (!compra || !pago || pago.estado !== "aprobado") return 0;
-      return (await aplicarReembolsoLocal(client, compra, pago, refundId, "refunded")).yaPagados;
+      return (
+        await aplicarReembolsoLocal(client, compra, pago, refundId, "refunded")
+      ).yaPagados;
     });
     return { resultado: "reembolsado", yaPagados };
   },
@@ -917,7 +1017,9 @@ export const pagoService = {
     let conPayoutsPagados = 0;
     for (const pago of pagos) {
       try {
-        const { resultado, yaPagados } = await this.reembolsarConDetalle(pago.id);
+        const { resultado, yaPagados } = await this.reembolsarConDetalle(
+          pago.id,
+        );
         if (resultado === "reembolsado") reembolsados++;
         if (yaPagados > 0) conPayoutsPagados++;
       } catch (error) {

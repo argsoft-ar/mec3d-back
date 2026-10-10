@@ -162,7 +162,8 @@ export const ordenFabricacionService = {
 
     // Se valida server-side (una sola query) que cada destinatario sea realmente un
     // fabricante: nunca se confía en un rol enviado por el cliente.
-    const fabricantesValidos = await userRepository.findFabricanteIds(fabricanteIds);
+    const fabricantesValidos =
+      await userRepository.findFabricanteIds(fabricanteIds);
     const noFabricantes = fabricanteIds.filter(
       (id) => !fabricantesValidos.includes(id),
     );
@@ -180,14 +181,18 @@ export const ordenFabricacionService = {
     }
     const materialIds: number[] = compra.material_id
       ? [compra.material_id]
-      : (await catalogoService.getMaterialesDeDiseno(diseno.id)).map((m) => m.id);
+      : (await catalogoService.getMaterialesDeDiseno(diseno.id)).map(
+          (m) => m.id,
+        );
     const compatibles =
       await ordenFabricacionRepository.getIdsFabricantesCompatibles(
         fabricanteIds,
         diseno.tecnologia_id,
         materialIds,
       );
-    const incompatibles = fabricanteIds.filter((id) => !compatibles.includes(id));
+    const incompatibles = fabricanteIds.filter(
+      (id) => !compatibles.includes(id),
+    );
     if (incompatibles.length > 0) {
       throw new ValidationError(
         `Los fabricantes ${incompatibles.join(", ")} no son compatibles con la tecnología y el material del diseño`,
@@ -215,7 +220,11 @@ export const ordenFabricacionService = {
             compraId,
             client,
           )) ??
-          (await ordenFabricacionRepository.createOne(compraId, fabricanteId, client));
+          (await ordenFabricacionRepository.createOne(
+            compraId,
+            fabricanteId,
+            client,
+          ));
 
         const conversacion =
           (await chatRepository.getByOrdenFabricacionId(orden.id, client)) ??
@@ -269,8 +278,13 @@ export const ordenFabricacionService = {
     // Con material elegido (debe pertenecer al diseño) se filtra por ese; sin él, por
     // cualquiera de los materiales compatibles del diseño.
     const materialIds = material
-      ? [(await catalogoService.resolverMaterialDeDiseno(disenoId, material)).id]
-      : (await catalogoService.getMaterialesDeDiseno(disenoId)).map((m) => m.id);
+      ? [
+          (await catalogoService.resolverMaterialDeDiseno(disenoId, material))
+            .id,
+        ]
+      : (await catalogoService.getMaterialesDeDiseno(disenoId)).map(
+          (m) => m.id,
+        );
 
     const rows = await ordenFabricacionRepository.getFabricantesSugeridos(
       diseno.tecnologia_id,
@@ -304,7 +318,10 @@ export const ordenFabricacionService = {
     const role = resolveRole(orden, userId);
 
     const updated = await withTransaction(async (client) => {
-      const bloqueada = await ordenFabricacionRepository.lockById(client, ordenId);
+      const bloqueada = await ordenFabricacionRepository.lockById(
+        client,
+        ordenId,
+      );
       if (!bloqueada || ESTADOS_FINALES.includes(bloqueada.estado)) {
         throw new ConflictError(
           "Esta orden ya no admite nuevas propuestas de precio",
@@ -381,7 +398,10 @@ export const ordenFabricacionService = {
     const resultado = await withTransaction(async (client) => {
       // Orden de locks: compra -> orden.
       const compra = await compraRepository.lockById(client, orden.compra_id);
-      const bloqueada = await ordenFabricacionRepository.lockById(client, ordenId);
+      const bloqueada = await ordenFabricacionRepository.lockById(
+        client,
+        ordenId,
+      );
       if (!compra || !bloqueada) {
         throw new NotFoundError("Orden de fabricación no encontrada");
       }
@@ -441,11 +461,19 @@ export const ordenFabricacionService = {
       }
 
       if (
-        !(await compraRepository.setMontoFabricacion(client, compra.id, precioCentavos))
+        !(await compraRepository.setMontoFabricacion(
+          client,
+          compra.id,
+          precioCentavos,
+        ))
       ) {
         throw new ConflictError("No se pudo fijar el monto de la compra");
       }
-      await ordenFabricacionRepository.cancelarHermanas(compra.id, ordenId, client);
+      await ordenFabricacionRepository.cancelarHermanas(
+        compra.id,
+        ordenId,
+        client,
+      );
 
       // Código de entrega de 6 dígitos: solo se persiste su HMAC. El comprador recibe un
       // código nuevo cada vez que lo consulta (ver getCodigoEntrega), que invalida el anterior.
@@ -468,7 +496,10 @@ export const ordenFabricacionService = {
 
     if (!resultado.cerrado) {
       return {
-        orden: mapOrden({ ...resultado.orden, compra_estado: "pendiente_pago" }),
+        orden: mapOrden({
+          ...resultado.orden,
+          compra_estado: "pendiente_pago",
+        }),
         pagoRequerido: false,
         initPoint: null,
       };
@@ -484,7 +515,8 @@ export const ordenFabricacionService = {
     let initPoint: string | null = null;
     if (role === "comprador") {
       try {
-        initPoint = (await pagoService.iniciarPago(orden.compra_id, userId)).initPoint;
+        initPoint = (await pagoService.iniciarPago(orden.compra_id, userId))
+          .initPoint;
       } catch (error) {
         // El trato ya está cerrado: el comprador reintenta con POST /compras/:id/pagar.
         console.error(
@@ -556,14 +588,19 @@ export const ordenFabricacionService = {
 
     const actualizada = await withTransaction(async (client) => {
       const compra = await compraRepository.lockById(client, orden.compra_id);
-      const bloqueada = await ordenFabricacionRepository.lockById(client, ordenId);
+      const bloqueada = await ordenFabricacionRepository.lockById(
+        client,
+        ordenId,
+      );
       if (!compra || !bloqueada || bloqueada.estado !== "trato_cerrado") {
         throw new ConflictError(
           "La orden no está en condiciones de confirmar la entrega",
         );
       }
       if (compra.estado !== "pagada") {
-        throw new ConflictError("El pago de la orden todavía no fue acreditado");
+        throw new ConflictError(
+          "El pago de la orden todavía no fue acreditado",
+        );
       }
       const declarada = await ordenFabricacionRepository.declararEntrega(
         ordenId,
@@ -655,14 +692,19 @@ export const ordenFabricacionService = {
 
     const { actualizada, liberados } = await withTransaction(async (client) => {
       const compra = await compraRepository.lockById(client, orden.compra_id);
-      const bloqueada = await ordenFabricacionRepository.lockById(client, ordenId);
+      const bloqueada = await ordenFabricacionRepository.lockById(
+        client,
+        ordenId,
+      );
       if (!compra || !bloqueada || bloqueada.estado !== "confirmada") {
         throw new ConflictError(
           "La orden no está en condiciones de confirmar la entrega",
         );
       }
       if (compra.estado !== "pagada") {
-        throw new ConflictError("El pago de la orden todavía no fue acreditado");
+        throw new ConflictError(
+          "El pago de la orden todavía no fue acreditado",
+        );
       }
 
       const completada = await ordenFabricacionRepository.confirmarEntrega(
@@ -672,7 +714,11 @@ export const ordenFabricacionService = {
       if (!completada) {
         throw new ConflictError("La entrega ya fue confirmada anteriormente");
       }
-      if (!(await compraRepository.completar(client, compra.id, { entrega: true }))) {
+      if (
+        !(await compraRepository.completar(client, compra.id, {
+          entrega: true,
+        }))
+      ) {
         throw new ConflictError("La compra ya fue completada");
       }
       const movimientos = await pagoService.liberarRetenidos(client, compra.id);
@@ -710,7 +756,10 @@ export const ordenFabricacionService = {
     const { cancelada, pagoId, estadoPrevio } = await withTransaction(
       async (client) => {
         const compra = await compraRepository.lockById(client, orden.compra_id);
-        const bloqueada = await ordenFabricacionRepository.lockById(client, ordenId);
+        const bloqueada = await ordenFabricacionRepository.lockById(
+          client,
+          ordenId,
+        );
         if (!compra || !bloqueada) {
           throw new NotFoundError("Orden de fabricación no encontrada");
         }
@@ -725,7 +774,10 @@ export const ordenFabricacionService = {
             "Con el pago acreditado no podés cancelar la orden: si hay un problema, abrí una disputa",
           );
         }
-        const cancelada = await ordenFabricacionRepository.cancelar(client, ordenId);
+        const cancelada = await ordenFabricacionRepository.cancelar(
+          client,
+          ordenId,
+        );
         if (!cancelada) {
           throw new ConflictError("La orden ya no puede cancelarse");
         }

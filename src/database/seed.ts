@@ -10,7 +10,9 @@ import { guardOrExit } from "./guard";
   // Sin contraseña por defecto: los usuarios de prueba (incluido un admin) nunca nacen con una conocida.
   const seedPassword = process.env.SEED_PASSWORD;
   if (!seedPassword || seedPassword.length < 8) {
-    console.error("❌ SEED_PASSWORD es obligatoria (mínimo 8 caracteres) para crear los usuarios de prueba");
+    console.error(
+      "❌ SEED_PASSWORD es obligatoria (mínimo 8 caracteres) para crear los usuarios de prueba",
+    );
     process.exit(1);
   }
 

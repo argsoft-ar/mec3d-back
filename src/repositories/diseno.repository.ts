@@ -165,7 +165,10 @@ export const disenoRepository = {
   },
 
   // archivo_url solo se selecciona para el dueño (respuestas de create/update); nunca en lecturas públicas.
-  async getByIdWithDesigner(id: string, opts: { incluirArchivo?: boolean } = {}) {
+  async getByIdWithDesigner(
+    id: string,
+    opts: { incluirArchivo?: boolean } = {},
+  ) {
     const query = `
       SELECT
         d.id, d.titulo, d.descripcion, d.imagen_url, ${opts.incluirArchivo ? "d.archivo_url," : ""} d.rating,
@@ -356,7 +359,10 @@ export const disenoRepository = {
   // compra pagada u orden en curso conserva el acceso aunque el diseño se haya dado de baja.
   // es_comprador solo vale para compras de descarga pagadas/completadas: el comprador de una
   // fabricación no accede al archivo (lo recibe el fabricante asignado con la compra pagada).
-  async getAccesoArchivo(id: string, userId: string): Promise<{
+  async getAccesoArchivo(
+    id: string,
+    userId: string,
+  ): Promise<{
     archivo_url: string;
     disenador_id: string;
     eliminado_en: Date | null;

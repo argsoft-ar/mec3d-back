@@ -7,20 +7,32 @@ export const CUENTA_COOLDOWN_HORAS = 24;
 
 const HORA_MS = 60 * 60 * 1000;
 
-function enteroNoNegativo(raw: string | undefined, porDefecto: number, max: number): number {
+function enteroNoNegativo(
+  raw: string | undefined,
+  porDefecto: number,
+  max: number,
+): number {
   if (raw === undefined || raw.trim() === "") return porDefecto;
   const n = Number(raw);
   return Number.isInteger(n) && n >= 0 && n <= max ? n : porDefecto;
 }
 
 // Días que un payout de descarga queda retenido antes de poder pagarse al vendedor.
-export function getPayoutHoldDays(env: NodeJS.ProcessEnv = process.env): number {
+export function getPayoutHoldDays(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
   return enteroNoNegativo(env.PAYOUT_HOLD_DAYS, DEFAULT_PAYOUT_HOLD_DAYS, 365);
 }
 
 // Días tras los que una orden 'confirmada' sin completar pasa a revisión admin.
-export function getDeliveryTimeoutDays(env: NodeJS.ProcessEnv = process.env): number {
-  const dias = enteroNoNegativo(env.DELIVERY_TIMEOUT_DAYS, DEFAULT_DELIVERY_TIMEOUT_DAYS, 365);
+export function getDeliveryTimeoutDays(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const dias = enteroNoNegativo(
+    env.DELIVERY_TIMEOUT_DAYS,
+    DEFAULT_DELIVERY_TIMEOUT_DAYS,
+    365,
+  );
   return dias === 0 ? DEFAULT_DELIVERY_TIMEOUT_DAYS : dias;
 }
 
@@ -40,7 +52,9 @@ export function cuentaHabilitadaDesde(
   actualizadaEn: Date | string | null | undefined,
 ): Date | null {
   if (!actualizadaEn) return null;
-  return new Date(new Date(actualizadaEn).getTime() + CUENTA_COOLDOWN_HORAS * HORA_MS);
+  return new Date(
+    new Date(actualizadaEn).getTime() + CUENTA_COOLDOWN_HORAS * HORA_MS,
+  );
 }
 
 export function cuentaEnCooldown(
@@ -55,7 +69,9 @@ export function enRetencion(
   liberableDesde: Date | string | null | undefined,
   ahora: Date = new Date(),
 ): boolean {
-  return !!liberableDesde && new Date(liberableDesde).getTime() > ahora.getTime();
+  return (
+    !!liberableDesde && new Date(liberableDesde).getTime() > ahora.getTime()
+  );
 }
 
 // ── Scheduler de reconciliación ──────────────────────────────────────────────

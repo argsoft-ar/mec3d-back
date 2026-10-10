@@ -109,7 +109,9 @@ export const userRepository = {
       );
       fields.push(`cuenta_mercadopago = $${idx}::varchar`);
       idx++;
-      values.push(data.cuentaMercadopago === "" ? null : data.cuentaMercadopago);
+      values.push(
+        data.cuentaMercadopago === "" ? null : data.cuentaMercadopago,
+      );
     }
     if (data.georefLocalidadId !== undefined) {
       fields.push(`georef_localidad_id = $${idx++}`);
@@ -257,7 +259,10 @@ export const userRepository = {
   },
 
   // Bloquea la fila del usuario para serializar cambios de rol concurrentes.
-  async lockRolById(db: Db, userId: string): Promise<{ rol_principal: string } | null> {
+  async lockRolById(
+    db: Db,
+    userId: string,
+  ): Promise<{ rol_principal: string } | null> {
     const result = await db.query<{ rol_principal: string }>(
       `SELECT rol_principal FROM usuarios WHERE id = $1 FOR UPDATE;`,
       [userId],
@@ -291,12 +296,14 @@ export const userRepository = {
   },
 
   async clearFabricanteRows(db: Db, userId: string): Promise<void> {
-    await db.query("DELETE FROM fabricante_materiales WHERE fabricante_id = $1", [
-      userId,
-    ]);
-    await db.query("DELETE FROM fabricante_tecnologias WHERE fabricante_id = $1", [
-      userId,
-    ]);
+    await db.query(
+      "DELETE FROM fabricante_materiales WHERE fabricante_id = $1",
+      [userId],
+    );
+    await db.query(
+      "DELETE FROM fabricante_tecnologias WHERE fabricante_id = $1",
+      [userId],
+    );
   },
 
   async getTecnologiasFabricante(fabricanteId: string): Promise<Tecnologia[]> {

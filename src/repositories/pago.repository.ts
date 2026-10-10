@@ -134,7 +134,13 @@ export const pagoRepository = {
       `UPDATE pagos
        SET mp_payment_id = $2, mp_status = $3, mp_status_detail = $4, raw = $5, actualizado_en = now()
        WHERE id = $1 AND mp_payment_id IS NULL;`,
-      [id, mpPaymentId, datos.mpStatus, datos.mpStatusDetail, JSON.stringify(datos.raw)],
+      [
+        id,
+        mpPaymentId,
+        datos.mpStatus,
+        datos.mpStatusDetail,
+        JSON.stringify(datos.raw),
+      ],
     );
     return result.rowCount === 1;
   },

@@ -6,12 +6,21 @@ import {
   ComisionesConfig,
 } from "../src/utils/comisiones.util";
 import { construirMovimientos } from "../src/utils/ledger.util";
-import { centavosAPesos, pesosACentavos, toCentavos } from "../src/utils/money.util";
+import {
+  centavosAPesos,
+  pesosACentavos,
+  toCentavos,
+} from "../src/utils/money.util";
 
-const CONFIG: ComisionesConfig = { plataformaBps: 1000, regaliaDisenadorBps: 300 };
+const CONFIG: ComisionesConfig = {
+  plataformaBps: 1000,
+  regaliaDisenadorBps: 300,
+};
 
-const monto = (d: { partes: { tipo: string; montoCentavos: number }[] }, tipo: string) =>
-  d.partes.find((p) => p.tipo === tipo)?.montoCentavos ?? 0;
+const monto = (
+  d: { partes: { tipo: string; montoCentavos: number }[] },
+  tipo: string,
+) => d.partes.find((p) => p.tipo === tipo)?.montoCentavos ?? 0;
 
 describe("porcentajeBps", () => {
   it("redondea hacia abajo con enteros", () => {
@@ -55,7 +64,11 @@ describe("calcularDesgloseFabricacion", () => {
     for (let m = 1; m <= 5_000; m++) {
       const d = calcularDesgloseFabricacion(m, CONFIG);
       expect(d.partes.reduce((s, p) => s + p.montoCentavos, 0)).toBe(m);
-      expect(d.partes.every((p) => Number.isInteger(p.montoCentavos) && p.montoCentavos > 0)).toBe(true);
+      expect(
+        d.partes.every(
+          (p) => Number.isInteger(p.montoCentavos) && p.montoCentavos > 0,
+        ),
+      ).toBe(true);
     }
     for (const m of [99_999_99, 123_456_789, 1_000_000_000]) {
       const d = calcularDesgloseFabricacion(m, CONFIG);
@@ -64,11 +77,21 @@ describe("calcularDesgloseFabricacion", () => {
   });
 
   it("respeta porcentajes configurables (0 y 100%)", () => {
-    const sinComision = calcularDesgloseFabricacion(1000, { plataformaBps: 0, regaliaDisenadorBps: 0 });
+    const sinComision = calcularDesgloseFabricacion(1000, {
+      plataformaBps: 0,
+      regaliaDisenadorBps: 0,
+    });
     expect(sinComision.partes).toEqual([
-      { tipo: "pago_fabricante", destinatario: "fabricante", montoCentavos: 1000 },
+      {
+        tipo: "pago_fabricante",
+        destinatario: "fabricante",
+        montoCentavos: 1000,
+      },
     ]);
-    const todoPlataforma = calcularDesgloseFabricacion(1000, { plataformaBps: 10_000, regaliaDisenadorBps: 300 });
+    const todoPlataforma = calcularDesgloseFabricacion(1000, {
+      plataformaBps: 10_000,
+      regaliaDisenadorBps: 300,
+    });
     expect(todoPlataforma.partes).toHaveLength(1);
     expect(todoPlataforma.partes[0].tipo).toBe("comision_plataforma");
   });
@@ -106,7 +129,10 @@ describe("validaciones", () => {
 
   it.each([-1, 10_001, 1.5])("rechaza bps inválidos %p", (bps) => {
     expect(() =>
-      calcularDesgloseFabricacion(1000, { plataformaBps: bps, regaliaDisenadorBps: 300 }),
+      calcularDesgloseFabricacion(1000, {
+        plataformaBps: bps,
+        regaliaDisenadorBps: 300,
+      }),
     ).toThrow("Configuración de comisiones inválida");
   });
 
@@ -114,15 +140,29 @@ describe("validaciones", () => {
     expect(() =>
       assertInvarianteDesglose({
         montoCentavos: 100,
-        partes: [{ tipo: "comision_plataforma", destinatario: "plataforma", montoCentavos: 99 }],
+        partes: [
+          {
+            tipo: "comision_plataforma",
+            destinatario: "plataforma",
+            montoCentavos: 99,
+          },
+        ],
       }),
     ).toThrow("Invariante violada");
     expect(() =>
       assertInvarianteDesglose({
         montoCentavos: 100,
         partes: [
-          { tipo: "comision_plataforma", destinatario: "plataforma", montoCentavos: 100 },
-          { tipo: "pago_disenador", destinatario: "disenador", montoCentavos: 0 },
+          {
+            tipo: "comision_plataforma",
+            destinatario: "plataforma",
+            montoCentavos: 100,
+          },
+          {
+            tipo: "pago_disenador",
+            destinatario: "disenador",
+            montoCentavos: 0,
+          },
         ],
       }),
     ).toThrow("parte del desglose inválida");
@@ -140,17 +180,33 @@ describe("construirMovimientos (ledger)", () => {
 
   it("fabricación: retención por el total + desglose que suma el total, todo retenido", () => {
     const movs = construirMovimientos(
-      { ...base, ordenId: "orden-1", tipoCompra: "fabricacion", montoCentavos: 1_000_000, fabricanteId: "fab-1" },
+      {
+        ...base,
+        ordenId: "orden-1",
+        tipoCompra: "fabricacion",
+        montoCentavos: 1_000_000,
+        fabricanteId: "fab-1",
+      },
       CONFIG,
     );
     const retencion = movs.find((m) => m.tipo === "retencion");
-    expect(retencion).toMatchObject({ usuarioId: null, montoCentavos: 1_000_000, estado: "retenido" });
+    expect(retencion).toMatchObject({
+      usuarioId: null,
+      montoCentavos: 1_000_000,
+      estado: "retenido",
+    });
     const desglose = movs.filter((m) => m.tipo !== "retencion");
     expect(desglose.reduce((s, m) => s + m.montoCentavos, 0)).toBe(1_000_000);
     expect(movs.every((m) => m.estado === "retenido")).toBe(true);
-    expect(movs.find((m) => m.tipo === "comision_plataforma")?.usuarioId).toBeNull();
-    expect(movs.find((m) => m.tipo === "regalia_disenador")?.usuarioId).toBe("disenador-1");
-    expect(movs.find((m) => m.tipo === "pago_fabricante")?.usuarioId).toBe("fab-1");
+    expect(
+      movs.find((m) => m.tipo === "comision_plataforma")?.usuarioId,
+    ).toBeNull();
+    expect(movs.find((m) => m.tipo === "regalia_disenador")?.usuarioId).toBe(
+      "disenador-1",
+    );
+    expect(movs.find((m) => m.tipo === "pago_fabricante")?.usuarioId).toBe(
+      "fab-1",
+    );
   });
 
   it("descarga: plataforma + diseñador", () => {
@@ -165,7 +221,10 @@ describe("construirMovimientos (ledger)", () => {
 
   it("fabricación sin fabricante es un error", () => {
     expect(() =>
-      construirMovimientos({ ...base, tipoCompra: "fabricacion", montoCentavos: 10_000 }, CONFIG),
+      construirMovimientos(
+        { ...base, tipoCompra: "fabricacion", montoCentavos: 10_000 },
+        CONFIG,
+      ),
     ).toThrow("sin fabricante");
   });
 });

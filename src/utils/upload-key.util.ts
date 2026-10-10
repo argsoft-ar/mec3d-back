@@ -44,7 +44,8 @@ export function extractCloudinaryKey(
 ): string | null {
   const cloudName = env.CLOUDINARY_CLOUD_NAME;
   const url = parseUrl(imagenUrl);
-  if (!cloudName || !url || url.hostname.toLowerCase() !== CLOUDINARY_HOST) return null;
+  if (!cloudName || !url || url.hostname.toLowerCase() !== CLOUDINARY_HOST)
+    return null;
   if (!url.pathname.startsWith(`/${cloudName}/`)) return null;
 
   let path: string;
@@ -65,5 +66,7 @@ export function claveUploadDesdeUrl(
   tipo: UploadTipo,
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  return tipo === "modelo" ? extractR2Key(url, env) : extractCloudinaryKey(url, env);
+  return tipo === "modelo"
+    ? extractR2Key(url, env)
+    : extractCloudinaryKey(url, env);
 }

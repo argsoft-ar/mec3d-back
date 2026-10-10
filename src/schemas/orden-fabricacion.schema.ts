@@ -61,11 +61,17 @@ export const disputarBodySchema = z.object({
       .string()
       .trim()
       .min(1, "El motivo es obligatorio")
-      .max(MAX_MOTIVO_DISPUTA, `El motivo no puede superar los ${MAX_MOTIVO_DISPUTA} caracteres`),
+      .max(
+        MAX_MOTIVO_DISPUTA,
+        `El motivo no puede superar los ${MAX_MOTIVO_DISPUTA} caracteres`,
+      ),
   }),
 });
 
-export const RESOLUCIONES_DISPUTA = ["liberar_fabricante", "reembolsar_comprador"] as const;
+export const RESOLUCIONES_DISPUTA = [
+  "liberar_fabricante",
+  "reembolsar_comprador",
+] as const;
 
 export const resolverDisputaSchema = z.object({
   params: z.object({
@@ -74,14 +80,18 @@ export const resolverDisputaSchema = z.object({
   body: z.object({
     resolucion: z.enum(RESOLUCIONES_DISPUTA, {
       errorMap: () => ({
-        message: "resolucion debe ser liberar_fabricante o reembolsar_comprador",
+        message:
+          "resolucion debe ser liberar_fabricante o reembolsar_comprador",
       }),
     }),
     nota: z
       .string()
       .trim()
       .min(1, "La nota es obligatoria")
-      .max(MAX_MOTIVO_DISPUTA, `La nota no puede superar los ${MAX_MOTIVO_DISPUTA} caracteres`),
+      .max(
+        MAX_MOTIVO_DISPUTA,
+        `La nota no puede superar los ${MAX_MOTIVO_DISPUTA} caracteres`,
+      ),
   }),
 });
 

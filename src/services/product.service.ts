@@ -12,7 +12,11 @@ import {
   PaginationParams,
   PaginatedResponse,
 } from "../interfaces/pagination.interface";
-import { NotFoundError, ForbiddenError, ValidationError } from "../errors/app-error";
+import {
+  NotFoundError,
+  ForbiddenError,
+  ValidationError,
+} from "../errors/app-error";
 import { getProvinciaPrefix, getPartidoPrefix } from "../utils/zona.util";
 import { catalogoService } from "./catalogo.service";
 import { archivoService, ArchivoFirmado } from "./archivo.service";
@@ -43,13 +47,19 @@ export async function verificarUploadsPropios(
   for (const [url, tipo, campo] of chequeos) {
     if (!url) continue;
     const key = claveUploadDesdeUrl(url, tipo, env);
-    const duenio = key ? await uploadRepository.getPropietario(key, tipo) : null;
+    const duenio = key
+      ? await uploadRepository.getPropietario(key, tipo)
+      : null;
     if (duenio === userId) continue;
     if (duenio !== null) {
-      throw new ForbiddenError(`${campo} corresponde a un archivo subido por otro usuario`);
+      throw new ForbiddenError(
+        `${campo} corresponde a un archivo subido por otro usuario`,
+      );
     }
     if (env.NODE_ENV === "production") {
-      throw new ValidationError(`${campo} debe ser un archivo subido a través de la plataforma`);
+      throw new ValidationError(
+        `${campo} debe ser un archivo subido a través de la plataforma`,
+      );
     }
   }
 }
@@ -159,7 +169,9 @@ export const productService = {
       data.materiales,
     );
 
-    const categoriaId = await catalogoService.resolverCategoriaId(data.categoria);
+    const categoriaId = await catalogoService.resolverCategoriaId(
+      data.categoria,
+    );
 
     const newProduct = await disenoRepository.createProduct({
       disenadorId: userId,
@@ -197,7 +209,8 @@ export const productService = {
 
     // Conservar la URL ya guardada no vuelve a exigir el registro de la subida.
     await verificarUploadsPropios(userId, {
-      archivoUrl: data.archivoUrl === existing.archivo_url ? null : data.archivoUrl,
+      archivoUrl:
+        data.archivoUrl === existing.archivo_url ? null : data.archivoUrl,
       imagenUrl: data.imagenUrl === existing.imagen_url ? null : data.imagenUrl,
     });
 
@@ -205,7 +218,9 @@ export const productService = {
       data.tecnologia,
       data.materiales,
     );
-    const categoriaId = await catalogoService.resolverCategoriaId(data.categoria);
+    const categoriaId = await catalogoService.resolverCategoriaId(
+      data.categoria,
+    );
 
     const updated = await disenoRepository.updateProduct(id, userId, {
       titulo: data.titulo,
@@ -243,7 +258,8 @@ export const productService = {
     }
 
     await verificarUploadsPropios(userId, {
-      archivoUrl: data.archivoUrl === existing.archivo_url ? null : data.archivoUrl,
+      archivoUrl:
+        data.archivoUrl === existing.archivo_url ? null : data.archivoUrl,
       imagenUrl: data.imagenUrl === existing.imagen_url ? null : data.imagenUrl,
     });
 
@@ -254,7 +270,8 @@ export const productService = {
     delete updates.disenadorId;
 
     if (categoria !== undefined) {
-      updates.categoriaId = await catalogoService.resolverCategoriaId(categoria);
+      updates.categoriaId =
+        await catalogoService.resolverCategoriaId(categoria);
     }
 
     let tecnologiaId: number = existing.tecnologia_id;
@@ -275,9 +292,9 @@ export const productService = {
     const materialIds =
       materiales === undefined
         ? undefined
-        : (await catalogoService.resolverMateriales(materiales, tecnologiaId)).map(
-            (m) => m.id,
-          );
+        : (
+            await catalogoService.resolverMateriales(materiales, tecnologiaId)
+          ).map((m) => m.id);
 
     const updated = await disenoRepository.partialUpdateProduct(
       id,

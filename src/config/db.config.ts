@@ -36,7 +36,10 @@ pool.on("connect", (client) => {
       `SET statement_timeout = ${statementTimeoutMs}; SET lock_timeout = ${lockTimeoutMs};`,
     )
     .catch((err: Error) => {
-      console.error("❌ No se pudieron fijar los timeouts de la conexión:", err.message);
+      console.error(
+        "❌ No se pudieron fijar los timeouts de la conexión:",
+        err.message,
+      );
     });
 });
 

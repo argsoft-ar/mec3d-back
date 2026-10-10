@@ -64,7 +64,13 @@ export const productSchemaDoc = {
   },
   CreateProductDTO: {
     type: "object",
-    required: ["titulo", "archivoUrl", "precioBase", "tecnologia", "materiales"],
+    required: [
+      "titulo",
+      "archivoUrl",
+      "precioBase",
+      "tecnologia",
+      "materiales",
+    ],
     properties: {
       titulo: { type: "string", minLength: 3, example: "Soporte para celular" },
       descripcion: { type: "string", example: "Soporte ergonómico ajustable" },
@@ -81,7 +87,8 @@ export const productSchemaDoc = {
       categoria: { type: "string", example: "Decoración" },
       tecnologia: {
         type: "string",
-        description: "Nombre de una tecnología del catálogo (GET /catalogos/tecnologias)",
+        description:
+          "Nombre de una tecnología del catálogo (GET /catalogos/tecnologias)",
         example: "Impresión 3D",
       },
       materiales: {

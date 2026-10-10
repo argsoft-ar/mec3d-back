@@ -41,7 +41,9 @@ function validarConfig(config: ComisionesConfig): void {
 
 function validarMonto(montoCentavos: number): void {
   if (!Number.isSafeInteger(montoCentavos) || montoCentavos <= 0) {
-    throw new Error("El monto a desglosar debe ser un entero positivo de centavos");
+    throw new Error(
+      "El monto a desglosar debe ser un entero positivo de centavos",
+    );
   }
 }
 
@@ -49,7 +51,10 @@ function validarMonto(montoCentavos: number): void {
 export function assertInvarianteDesglose(desglose: Desglose): void {
   let suma = 0;
   for (const parte of desglose.partes) {
-    if (!Number.isSafeInteger(parte.montoCentavos) || parte.montoCentavos <= 0) {
+    if (
+      !Number.isSafeInteger(parte.montoCentavos) ||
+      parte.montoCentavos <= 0
+    ) {
       throw new Error("Invariante violada: parte del desglose inválida");
     }
     suma += parte.montoCentavos;
@@ -87,9 +92,21 @@ export function calcularDesgloseFabricacion(
   const fabricante = gananciaBruta - disenador;
 
   return construir(montoCentavos, [
-    { tipo: "comision_plataforma", destinatario: "plataforma", montoCentavos: plataforma },
-    { tipo: "regalia_disenador", destinatario: "disenador", montoCentavos: disenador },
-    { tipo: "pago_fabricante", destinatario: "fabricante", montoCentavos: fabricante },
+    {
+      tipo: "comision_plataforma",
+      destinatario: "plataforma",
+      montoCentavos: plataforma,
+    },
+    {
+      tipo: "regalia_disenador",
+      destinatario: "disenador",
+      montoCentavos: disenador,
+    },
+    {
+      tipo: "pago_fabricante",
+      destinatario: "fabricante",
+      montoCentavos: fabricante,
+    },
   ]);
 }
 
@@ -105,7 +122,15 @@ export function calcularDesgloseDescarga(
   const disenador = montoCentavos - plataforma;
 
   return construir(montoCentavos, [
-    { tipo: "comision_plataforma", destinatario: "plataforma", montoCentavos: plataforma },
-    { tipo: "pago_disenador", destinatario: "disenador", montoCentavos: disenador },
+    {
+      tipo: "comision_plataforma",
+      destinatario: "plataforma",
+      montoCentavos: plataforma,
+    },
+    {
+      tipo: "pago_disenador",
+      destinatario: "disenador",
+      montoCentavos: disenador,
+    },
   ]);
 }

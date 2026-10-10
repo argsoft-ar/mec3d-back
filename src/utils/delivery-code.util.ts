@@ -28,6 +28,12 @@ export function verificarCodigoEntrega(
 ): boolean {
   if (!hashAlmacenado) return false;
   const esperado = Buffer.from(hashAlmacenado, "hex");
-  const calculado = Buffer.from(hashCodigoEntrega(ordenId, codigo, secret), "hex");
-  return esperado.length === calculado.length && crypto.timingSafeEqual(esperado, calculado);
+  const calculado = Buffer.from(
+    hashCodigoEntrega(ordenId, codigo, secret),
+    "hex",
+  );
+  return (
+    esperado.length === calculado.length &&
+    crypto.timingSafeEqual(esperado, calculado)
+  );
 }

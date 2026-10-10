@@ -72,7 +72,9 @@ export function validateDeliveryCodeEnv(
   if (env.NODE_ENV === "production") {
     throw new Error(`FATAL: ${message}`);
   }
-  console.warn(`⚠️  ${message}. El cierre de tratos de fabricación no funcionará.`);
+  console.warn(
+    `⚠️  ${message}. El cierre de tratos de fabricación no funcionará.`,
+  );
 }
 
 // ── Secretos en producción ───────────────────────────────────────────────────
@@ -91,7 +93,10 @@ const PLACEHOLDER_VALUES = new Set([
 
 export function esSecretoPlaceholder(valor: string): boolean {
   const v = valor.trim().toLowerCase();
-  return PLACEHOLDER_VALUES.has(v) || PLACEHOLDER_PREFIXES.some((p) => v.startsWith(p));
+  return (
+    PLACEHOLDER_VALUES.has(v) ||
+    PLACEHOLDER_PREFIXES.some((p) => v.startsWith(p))
+  );
 }
 
 // En producción el servidor no arranca con secretos débiles o de ejemplo; fuera de
@@ -101,9 +106,15 @@ export function validateSecretsEnv(env: NodeJS.ProcessEnv = process.env): void {
   const problemas: string[] = [];
   const jwt = env.JWT_SECRET?.trim() ?? "";
   if (jwt.length < MIN_JWT_SECRET_LENGTH) {
-    problemas.push(`JWT_SECRET debe tener al menos ${MIN_JWT_SECRET_LENGTH} caracteres`);
+    problemas.push(
+      `JWT_SECRET debe tener al menos ${MIN_JWT_SECRET_LENGTH} caracteres`,
+    );
   }
-  for (const nombre of ["JWT_SECRET", "DELIVERY_CODE_SECRET", "MP_WEBHOOK_SECRET"] as const) {
+  for (const nombre of [
+    "JWT_SECRET",
+    "DELIVERY_CODE_SECRET",
+    "MP_WEBHOOK_SECRET",
+  ] as const) {
     const valor = env[nombre];
     if (valor && esSecretoPlaceholder(valor)) {
       problemas.push(`${nombre} usa un valor de ejemplo`);
@@ -164,9 +175,9 @@ function parseMercadoPagoEnv(
   // En producción las URLs deben ser https: MP no entrega webhooks a http plano y
   // el redirect post-pago expondría los parámetros del pago.
   if (env.NODE_ENV === "production") {
-    const insecure = (
-      ["MP_NOTIFICATION_URL", "FRONTEND_URL"] as const
-    ).filter((k) => !data[k].startsWith("https://"));
+    const insecure = (["MP_NOTIFICATION_URL", "FRONTEND_URL"] as const).filter(
+      (k) => !data[k].startsWith("https://"),
+    );
     if (insecure.length > 0) return { invalidKeys: insecure };
   }
 

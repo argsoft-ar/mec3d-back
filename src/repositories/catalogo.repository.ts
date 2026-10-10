@@ -47,7 +47,9 @@ export const catalogoRepository = {
   },
 
   // Solo lectura: las categorías son un catálogo cerrado, nunca se crean desde la API.
-  async findCategoriaByNombre(nombre: string): Promise<CategoriaCatalogoRow | null> {
+  async findCategoriaByNombre(
+    nombre: string,
+  ): Promise<CategoriaCatalogoRow | null> {
     const result = await pool.query<CategoriaCatalogoRow>(
       `SELECT id, nombre FROM categorias WHERE lower(nombre) = lower($1) LIMIT 1;`,
       [nombre],
@@ -65,7 +67,9 @@ export const catalogoRepository = {
     return result.rows;
   },
 
-  async getMaterialesDeDiseno(disenoId: string): Promise<MaterialCatalogoRow[]> {
+  async getMaterialesDeDiseno(
+    disenoId: string,
+  ): Promise<MaterialCatalogoRow[]> {
     const result = await pool.query<MaterialCatalogoRow>(
       `SELECT m.id, m.nombre, m.tecnologia_id
        FROM diseno_materiales dm

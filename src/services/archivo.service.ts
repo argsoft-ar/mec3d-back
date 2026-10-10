@@ -24,7 +24,9 @@ export const archivoService = {
     const key = extractR2Key(archivoUrl);
     if (key) {
       if (!envConfig.r2.bucketName) {
-        console.error("❌ R2_BUCKET_NAME no configurado: no se puede firmar la URL");
+        console.error(
+          "❌ R2_BUCKET_NAME no configurado: no se puede firmar la URL",
+        );
         throw new AppError("El archivo no está disponible", 503);
       }
       try {
@@ -46,7 +48,9 @@ export const archivoService = {
     if (isTrustedAssetHost(archivoUrl)) {
       return { url: archivoUrl, expiresIn: null };
     }
-    console.error("❌ archivo_url con host no permitido, se rechaza la entrega");
+    console.error(
+      "❌ archivo_url con host no permitido, se rechaza la entrega",
+    );
     throw new AppError("El archivo no está disponible", 502);
   },
 };

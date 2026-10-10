@@ -9,7 +9,10 @@ import {
   listarDisputas,
   resolverDisputa,
 } from "../controllers/orden-fabricacion.controller";
-import { authenticateToken, requireAdmin } from "../middlewares/auth.middleware";
+import {
+  authenticateToken,
+  requireAdmin,
+} from "../middlewares/auth.middleware";
 import { validateSchema } from "../middlewares/validate.middleware";
 import { uuidParamSchema } from "../schemas/common.schema";
 import {
@@ -39,7 +42,10 @@ router.post(
   marcarPayoutPagado,
 );
 
-router.post("/pagos/reembolsos-pendientes/reintentar", reintentarReembolsosPendientes);
+router.post(
+  "/pagos/reembolsos-pendientes/reintentar",
+  reintentarReembolsosPendientes,
+);
 
 router.post("/pagos/reconciliar", reconciliarPagosPendientes);
 

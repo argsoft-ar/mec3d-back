@@ -35,7 +35,9 @@ export function construirMovimientos(
 ): NuevoMovimiento[] {
   const desglose = calcularDesglose(ctx, config);
 
-  const usuarioDe = (destinatario: "plataforma" | "disenador" | "fabricante") => {
+  const usuarioDe = (
+    destinatario: "plataforma" | "disenador" | "fabricante",
+  ) => {
     if (destinatario === "plataforma") return null;
     if (destinatario === "disenador") return ctx.disenadorId;
     if (!ctx.fabricanteId) {

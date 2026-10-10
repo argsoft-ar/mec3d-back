@@ -46,7 +46,10 @@ export const getFabricantesSugeridos = async (
     const compraId = req.query.compraId as string;
     const material = req.query.material as string | undefined;
     // page y limit ya vienen validados (limit <= 50) y convertidos a number.
-    const { page, limit } = req.query as unknown as { page: number; limit: number };
+    const { page, limit } = req.query as unknown as {
+      page: number;
+      limit: number;
+    };
     const fabricantes = await ordenFabricacionService.fabricantesSugeridos(
       disenoId,
       compraId,
@@ -264,7 +267,8 @@ export const disputarOrden = async (
     const { motivo } = req.body as { motivo: string };
     const orden = await disputaService.abrir(req.params.id, userId, motivo);
     res.status(200).json({
-      message: "Disputa abierta: los fondos quedan congelados hasta que un administrador la resuelva",
+      message:
+        "Disputa abierta: los fondos quedan congelados hasta que un administrador la resuelva",
       data: orden,
     });
   } catch (error) {

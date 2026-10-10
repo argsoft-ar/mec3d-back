@@ -17,7 +17,8 @@ export const updateProfileSchema = z.object({
       .trim()
       .max(255)
       .refine((v) => v === "" || esCuentaMercadopagoValida(v), {
-        message: "cuentaMercadopago debe ser un CBU/CVU de 22 dígitos, un alias (6-20 caracteres) o un email",
+        message:
+          "cuentaMercadopago debe ser un CBU/CVU de 22 dígitos, un alias (6-20 caracteres) o un email",
       })
       .optional(),
     username: z

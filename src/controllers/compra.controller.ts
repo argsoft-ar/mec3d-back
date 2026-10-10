@@ -58,7 +58,9 @@ export const getEstadoPago = async (
       res.status(401).json({ error: "No autorizado" });
       return;
     }
-    res.status(200).json(await pagoService.getEstadoPago(req.params.id, userId));
+    res
+      .status(200)
+      .json(await pagoService.getEstadoPago(req.params.id, userId));
   } catch (error) {
     next(error);
   }

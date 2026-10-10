@@ -17,7 +17,10 @@ export const numericIdParamSchema = z.object({
 // zonaId (código INDEC) como query param: solo dígitos, hasta 8, convertido a number.
 export const zonaIdQuerySchema = z
   .string()
-  .regex(/^\d{1,8}$/, "zonaId debe ser un código INDEC numérico de hasta 8 dígitos")
+  .regex(
+    /^\d{1,8}$/,
+    "zonaId debe ser un código INDEC numérico de hasta 8 dígitos",
+  )
   .transform(Number);
 
 export const MAX_FABRICANTES_PAGE_SIZE = 50;

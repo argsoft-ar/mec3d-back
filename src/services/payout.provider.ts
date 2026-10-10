@@ -47,7 +47,8 @@ export async function solicitarPayouts(
     if (!mov.usuario_id || enRetencion(mov.liberable_desde)) continue;
     try {
       const usuario = await userRepository.findById(mov.usuario_id);
-      if (cuentaEnCooldown(usuario?.cuenta_mercadopago_actualizada_en)) continue;
+      if (cuentaEnCooldown(usuario?.cuenta_mercadopago_actualizada_en))
+        continue;
       const resultado = await provider.solicitarPayout({
         movimientoId: mov.id,
         usuarioId: mov.usuario_id,
@@ -66,7 +67,8 @@ export async function solicitarPayouts(
               mov.id,
               resultado.referencia ?? `${provider.nombre}:${mov.id}`,
               {
-                destino: usuario?.cuenta_mercadopago ?? `proveedor:${provider.nombre}`,
+                destino:
+                  usuario?.cuenta_mercadopago ?? `proveedor:${provider.nombre}`,
                 adminId: null,
               },
             );

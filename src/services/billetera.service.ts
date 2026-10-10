@@ -4,7 +4,10 @@ import {
   MovimientoRow,
   PayoutPendiente,
 } from "../interfaces/pago.interface";
-import { PaginatedResponse, PaginationParams } from "../interfaces/pagination.interface";
+import {
+  PaginatedResponse,
+  PaginationParams,
+} from "../interfaces/pagination.interface";
 import { movimientoRepository } from "../repositories/movimiento.repository";
 import { userRepository } from "../repositories/user.repository";
 import { ConflictError, NotFoundError } from "../errors/app-error";
@@ -48,7 +51,12 @@ export const billeteraService = {
     const estados = estado ? [estado] : ESTADOS_BILLETERA;
 
     const [{ rows, total }, sumas, usuario] = await Promise.all([
-      movimientoRepository.listarPorUsuario(userId, estados, limit, (page - 1) * limit),
+      movimientoRepository.listarPorUsuario(
+        userId,
+        estados,
+        limit,
+        (page - 1) * limit,
+      ),
       movimientoRepository.sumasPorEstado(userId),
       userRepository.findById(userId),
     ]);
@@ -65,8 +73,9 @@ export const billeteraService = {
           usuario?.cuenta_mercadopago_actualizada_en,
         ),
         cuentaMercadopagoHabilitadaDesde:
-          cuentaHabilitadaDesde(usuario?.cuenta_mercadopago_actualizada_en)?.toISOString() ??
-          null,
+          cuentaHabilitadaDesde(
+            usuario?.cuenta_mercadopago_actualizada_en,
+          )?.toISOString() ?? null,
       },
     };
   },
@@ -82,7 +91,9 @@ export const billeteraService = {
     return {
       data: rows.map((row) => {
         const retenido = enRetencion(row.liberable_desde);
-        const cooldown = cuentaEnCooldown(row.cuenta_mercadopago_actualizada_en);
+        const cooldown = cuentaEnCooldown(
+          row.cuenta_mercadopago_actualizada_en,
+        );
         return {
           id: row.id,
           tipo: row.tipo,
@@ -94,8 +105,9 @@ export const billeteraService = {
           enRetencion: retenido,
           cuentaEnCooldown: cooldown,
           cuentaHabilitadaDesde:
-            cuentaHabilitadaDesde(row.cuenta_mercadopago_actualizada_en)?.toISOString() ??
-            null,
+            cuentaHabilitadaDesde(
+              row.cuenta_mercadopago_actualizada_en,
+            )?.toISOString() ?? null,
           pagable: !retenido && !cooldown && Boolean(row.cuenta_mercadopago),
           usuario: {
             id: row.usuario_id as string,
@@ -123,7 +135,9 @@ export const billeteraService = {
 
       if (mov.estado === "pagado") {
         if (mov.payout_referencia === referencia) return mapMovimiento(mov);
-        throw new ConflictError("El payout ya fue registrado con otra referencia");
+        throw new ConflictError(
+          "El payout ya fue registrado con otra referencia",
+        );
       }
       if (mov.estado !== "pendiente_payout" || !mov.usuario_id) {
         throw new ConflictError("El movimiento no está pendiente de payout");
@@ -134,9 +148,14 @@ export const billeteraService = {
         );
       }
 
-      const cuenta = await userRepository.getCuentaPayout(client, mov.usuario_id);
+      const cuenta = await userRepository.getCuentaPayout(
+        client,
+        mov.usuario_id,
+      );
       if (!cuenta?.cuenta_mercadopago) {
-        throw new ConflictError("El vendedor no tiene una cuenta de Mercado Pago configurada");
+        throw new ConflictError(
+          "El vendedor no tiene una cuenta de Mercado Pago configurada",
+        );
       }
       if (cuentaEnCooldown(cuenta.cuenta_mercadopago_actualizada_en)) {
         throw new ConflictError(
@@ -144,11 +163,17 @@ export const billeteraService = {
         );
       }
 
-      const pagado = await movimientoRepository.marcarPagado(client, movimientoId, referencia, {
-        destino: cuenta.cuenta_mercadopago,
-        adminId,
-      });
-      if (!pagado) throw new ConflictError("El movimiento no está pendiente de payout");
+      const pagado = await movimientoRepository.marcarPagado(
+        client,
+        movimientoId,
+        referencia,
+        {
+          destino: cuenta.cuenta_mercadopago,
+          adminId,
+        },
+      );
+      if (!pagado)
+        throw new ConflictError("El movimiento no está pendiente de payout");
       return mapMovimiento(pagado);
     });
   },

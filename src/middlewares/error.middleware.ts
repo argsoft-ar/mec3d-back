@@ -10,13 +10,21 @@ export function mapBodyParserError(
   const type = (err as { type?: unknown } | null)?.type;
   if (typeof type !== "string" || !type.startsWith("entity.")) return null;
   if (type === "entity.too.large") {
-    return { status: 413, message: "El cuerpo de la solicitud es demasiado grande" };
+    return {
+      status: 413,
+      message: "El cuerpo de la solicitud es demasiado grande",
+    };
   }
   return { status: 400, message: "Cuerpo de la solicitud inválido" };
 }
 
 // Para rutas con su propio parser: responde sin log de stack ni detalles del parser.
-export const bodyParseErrorHandler: ErrorRequestHandler = (err, _req, res, next) => {
+export const bodyParseErrorHandler: ErrorRequestHandler = (
+  err,
+  _req,
+  res,
+  next,
+) => {
   const mapped = mapBodyParserError(err);
   if (!mapped) {
     next(err);

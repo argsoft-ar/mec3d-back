@@ -155,7 +155,10 @@ export const movimientoRepository = {
   async sumasPorEstado(
     usuarioId: string,
   ): Promise<Record<"retenido" | "pendiente_payout" | "pagado", number>> {
-    const result = await pool.query<{ estado: EstadoMovimiento; total: string }>(
+    const result = await pool.query<{
+      estado: EstadoMovimiento;
+      total: string;
+    }>(
       `SELECT estado, SUM(monto_centavos) AS total FROM movimientos
        WHERE usuario_id = $1 AND tipo <> 'reembolso'
          AND estado IN ('retenido', 'pendiente_payout', 'pagado')
@@ -199,10 +202,7 @@ export const movimientoRepository = {
     return { rows: rows.rows, total: Number(total.rows[0].total) };
   },
 
-  async lockPayoutPendiente(
-    db: Db,
-    id: string,
-  ): Promise<MovimientoRow | null> {
+  async lockPayoutPendiente(db: Db, id: string): Promise<MovimientoRow | null> {
     const result = await db.query<MovimientoRow>(
       `SELECT ${COLUMNAS} FROM movimientos
        WHERE id = $1 AND estado = 'pendiente_payout' AND usuario_id IS NOT NULL

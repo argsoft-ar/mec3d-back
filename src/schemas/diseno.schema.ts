@@ -56,7 +56,8 @@ export function isAllowedAssetUrl(
   if (!url) return false;
   if (url.username || url.password) return false;
   if (isLocalDev(url, env)) return true;
-  if (url.protocol !== "https:" || (url.port && url.port !== "443")) return false;
+  if (url.protocol !== "https:" || (url.port && url.port !== "443"))
+    return false;
 
   const host = url.hostname.toLowerCase();
   const extra = (env.ALLOWED_ASSET_HOSTS ?? "")
@@ -135,10 +136,18 @@ const specSchema = z.object({
     .max(50, "Las dimensiones no pueden superar 50 caracteres"),
   dificultad: z.enum(["Básico", "Intermedio", "Avanzado"]),
   tiempoImpresion: z
-    .number({ invalid_type_error: "El tiempo de impresión debe ser un número de horas" })
+    .number({
+      invalid_type_error: "El tiempo de impresión debe ser un número de horas",
+    })
     .int("El tiempo de impresión debe ser un número entero de horas")
-    .min(MIN_PRINT_HOURS, `El tiempo de impresión mínimo es ${MIN_PRINT_HOURS} hora`)
-    .max(MAX_PRINT_HOURS, `El tiempo de impresión máximo es ${MAX_PRINT_HOURS} horas`),
+    .min(
+      MIN_PRINT_HOURS,
+      `El tiempo de impresión mínimo es ${MIN_PRINT_HOURS} hora`,
+    )
+    .max(
+      MAX_PRINT_HOURS,
+      `El tiempo de impresión máximo es ${MAX_PRINT_HOURS} horas`,
+    ),
   soportes: z.enum(["Necesarios", "No necesarios"]),
   configuracion: z.object({
     layer: z.enum(["0.1mm", "0.15mm", "0.2mm", "0.3mm"]),
@@ -175,7 +184,10 @@ const productBodySchema = z.object({
     "El archivo URL debe ser válido y es obligatorio",
   ),
   precioBase: precioPesosSchema,
-  formato: z.string().max(50, "El formato no puede superar 50 caracteres").optional(),
+  formato: z
+    .string()
+    .max(50, "El formato no puede superar 50 caracteres")
+    .optional(),
   especificaciones: specSchema.optional(),
   categoria: z
     .string()

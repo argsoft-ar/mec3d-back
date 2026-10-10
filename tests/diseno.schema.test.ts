@@ -54,7 +54,10 @@ describe("createProductSchema", () => {
   ])("rechaza tiempoImpresion %s", (_name, value) => {
     const body = {
       ...validBody,
-      especificaciones: { ...validBody.especificaciones, tiempoImpresion: value },
+      especificaciones: {
+        ...validBody.especificaciones,
+        tiempoImpresion: value,
+      },
     };
     expect(parse(body).success).toBe(false);
   });

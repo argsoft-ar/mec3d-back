@@ -156,7 +156,10 @@ export const getArchivoPreview = async (
       return;
     }
 
-    const archivo = await productService.getArchivoPreview(req.params.id, userId);
+    const archivo = await productService.getArchivoPreview(
+      req.params.id,
+      userId,
+    );
     // La URL firmada da acceso al archivo de pago: no debe quedar en caches.
     res.set("Cache-Control", "no-store");
     res.status(200).json(archivo);

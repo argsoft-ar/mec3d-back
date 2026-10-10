@@ -51,7 +51,8 @@ export const MATERIALES_SEED: ReadonlyArray<{
   },
 ];
 
-const sqlLiteral = (value: string): string => `'${value.replaceAll("'", "''")}'`;
+const sqlLiteral = (value: string): string =>
+  `'${value.replaceAll("'", "''")}'`;
 
 // SQL idempotente (ON CONFLICT DO NOTHING) construido solo con constantes de este archivo,
 // nunca con input externo; se ejecuta como parte de scripts multi-statement sin parámetros.
