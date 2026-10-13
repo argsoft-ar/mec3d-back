@@ -109,6 +109,44 @@ export const productPaths = {
     },
   },
   "/productos/{id}": {
+    get: {
+      tags: ["Productos"],
+      summary: "Obtener un producto por id (público)",
+      parameters: [
+        {
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Producto (misma forma que cada ítem del listado)",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Product" },
+            },
+          },
+        },
+        400: {
+          description: "El id no es un UUID válido",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ApiError" },
+            },
+          },
+        },
+        404: {
+          description: "Producto no encontrado o eliminado",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ApiError" },
+            },
+          },
+        },
+      },
+    },
     put: {
       tags: ["Productos"],
       summary: "Actualizar un producto completo",

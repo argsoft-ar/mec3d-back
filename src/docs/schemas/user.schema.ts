@@ -29,12 +29,19 @@ export const userSchemaDoc = {
   },
   RegisterRequest: {
     type: "object",
-    required: ["email", "password", "rolPrincipal"],
+    required: ["email", "username", "password", "rolPrincipal"],
     properties: {
       email: {
         type: "string",
         format: "email",
         example: "usuario@ejemplo.com",
+      },
+      username: {
+        type: "string",
+        minLength: 3,
+        maxLength: 30,
+        pattern: "^\\w+$",
+        example: "juan_perez",
       },
       password: { type: "string", minLength: 8, example: "Password123" },
       rolPrincipal: { $ref: "#/components/schemas/RolUsuario" },
@@ -50,6 +57,7 @@ export const userSchemaDoc = {
         properties: {
           id: { type: "string", format: "uuid" },
           email: { type: "string", format: "email" },
+          username: { type: "string", example: "juan_perez" },
           rolPrincipal: { $ref: "#/components/schemas/RolUsuario" },
           zonaId: { type: "integer", nullable: true },
           creadoEn: { type: "string", format: "date-time" },

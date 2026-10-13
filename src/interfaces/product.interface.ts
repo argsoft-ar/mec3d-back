@@ -1,8 +1,8 @@
 export interface ProductSpecificaciones {
-  material: string;
   dimensiones: string;
   dificultad: string;
-  tiempoImpresion: string;
+  // Horas enteras (1-500): impresión 3D o fabricación CNC.
+  tiempoImpresion: number;
   soportes: string;
   configuracion: {
     layer: string;
@@ -29,6 +29,9 @@ export interface Product {
   price: number;
   format: string;
   categoria?: string;
+  // null (y materiales []) en planos técnicos sin tecnología.
+  tecnologia: string | null;
+  materiales: string[];
   archivoUrl?: string;
   specs: ProductSpecificaciones | null;
   designer: ProductDesigner;
@@ -43,8 +46,11 @@ export interface CreateProductDTO {
   precioBase: number;
   formato?: string;
   categoria?: string;
+  // Obligatorios salvo en la categoría "Planos técnicos".
+  tecnologia?: string;
+  materiales?: string[];
   especificaciones?: ProductSpecificaciones;
 }
 
-export interface UpdateProductDTO extends CreateProductDTO {}
+export type UpdateProductDTO = CreateProductDTO;
 export type PartialUpdateProductDTO = Partial<CreateProductDTO>;

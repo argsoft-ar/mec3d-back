@@ -22,3 +22,25 @@ export const getMensajes = async (
     next(error);
   }
 };
+
+export const getMisConversaciones = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const conversaciones = await chatService.listarConversaciones(userId);
+    res.status(200).json({
+      message: "Conversaciones obtenidas exitosamente",
+      data: conversaciones,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

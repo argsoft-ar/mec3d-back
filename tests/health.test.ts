@@ -2,6 +2,9 @@ import request from "supertest";
 import app from "../src/app";
 import pool from "../src/config/db.config";
 
+// La primera request carga toda la app: con suites en paralelo puede superar los 5 s por defecto.
+jest.setTimeout(30_000);
+
 afterAll(async () => {
   await pool.end();
 });
