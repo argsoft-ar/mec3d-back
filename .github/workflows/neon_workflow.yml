@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       db_url: ${{ steps.create_branch.outputs.db_url }}
-      db_url_with_pooler: ${{ steps.create_branch.outputs.db_url_with_pooler }}
+      db_url_pooled: ${{ steps.create_branch.outputs.db_url_pooled }}
     steps:
       - name: Calcular fecha de expiración (2 semanas)
         run: echo "EXPIRES_AT=$(date -u --date '+14 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
@@ -77,13 +77,13 @@ jobs:
       - name: Init schema en la rama preview (DB descartable por PR)
         run: npm run db:init -- --force
         env:
-          DATABASE_URL: ${{ needs.create_neon_branch.outputs.db_url_with_pooler }}
+          DATABASE_URL: ${{ needs.create_neon_branch.outputs.db_url_pooled }}
           NODE_ENV: test
 
       - name: Run tests
         run: npm run test:ci
         env:
-          DATABASE_URL: ${{ needs.create_neon_branch.outputs.db_url_with_pooler }}
+          DATABASE_URL: ${{ needs.create_neon_branch.outputs.db_url_pooled }}
           NODE_ENV: test
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
