@@ -35,12 +35,15 @@ export interface UserResponse {
 export interface Material {
   id: number;
   material: string;
+  materialId: number;
+  tecnologia: string;
   disponible: boolean;
 }
 
 export interface Tecnologia {
   id: number;
   tecnologia: string;
+  tecnologiaId: number;
   disponible: boolean;
 }
 

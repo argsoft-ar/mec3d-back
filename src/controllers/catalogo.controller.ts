@@ -1,24 +1,30 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
+import { catalogoService } from "../services/catalogo.service";
 
-const MATERIALES_CATALOGO = [
-  { id: 1, nombre: "Aluminio" },
-  { id: 2, nombre: "Metal" },
-  { id: 3, nombre: "ASA" },
-  { id: 4, nombre: "PETG" },
-  { id: 5, nombre: "PLA" },
-  { id: 6, nombre: "ABS" },
-  { id: 7, nombre: "Nylon" },
-];
-
-const TECNOLOGIAS_CATALOGO = [
-  { id: 1, nombre: "CNC" },
-  { id: 2, nombre: "Impresión 3D" },
-];
-
-export const getMateriales = (_req: Request, res: Response): void => {
-  res.status(200).json(MATERIALES_CATALOGO);
+export const getMateriales = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    // tecnologiaId ya viene validado/convertido a number por listMaterialesSchema.
+    const tecnologiaId = req.query.tecnologiaId as unknown as
+      | number
+      | undefined;
+    res.status(200).json(await catalogoService.getMateriales(tecnologiaId));
+  } catch (error) {
+    next(error);
+  }
 };
 
-export const getTecnologias = (_req: Request, res: Response): void => {
-  res.status(200).json(TECNOLOGIAS_CATALOGO);
+export const getTecnologias = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    res.status(200).json(await catalogoService.getTecnologias());
+  } catch (error) {
+    next(error);
+  }
 };

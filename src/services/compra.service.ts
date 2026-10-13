@@ -1,69 +1,143 @@
-import crypto from "crypto";
 import { compraRepository } from "../repositories/compra.repository";
 import { disenoRepository } from "../repositories/diseno.repository";
-import { Compra, MisComprasItem } from "../interfaces/compra.interface";
 import {
-  NotFoundError,
-  ForbiddenError,
+  Compra,
+  CrearCompraResultado,
+  MisComprasItem,
+} from "../interfaces/compra.interface";
+import { CompraRow, TipoCompra } from "../interfaces/pago.interface";
+import {
   ConflictError,
-  UnauthorizedError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
 } from "../errors/app-error";
+import {
+  centavosAPesos,
+  pesosACentavos,
+  toCentavos,
+} from "../utils/money.util";
+import { withTransaction } from "../utils/transaction.util";
+import {
+  esCategoriaPlano,
+  MSG_PLANO_SIN_FABRICACION,
+} from "../utils/plano.util";
+import { catalogoService } from "./catalogo.service";
+import { pagoService } from "./pago.service";
+import { archivoService } from "./archivo.service";
 
-function hashToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
+type CompraConMaterial = Partial<CompraRow> &
+  Pick<CompraRow, "id" | "id_comprador" | "id_modelo" | "id_disenador"> & {
+    material_nombre?: string | null;
+  };
 
-function mapCompra(row: any): Compra {
+function mapCompra(row: CompraConMaterial): Compra {
+  const monto =
+    row.monto_centavos === null || row.monto_centavos === undefined
+      ? null
+      : toCentavos(row.monto_centavos);
   return {
     id: row.id,
     idComprador: row.id_comprador,
     idModelo: row.id_modelo,
     idDisenador: row.id_disenador,
-    precioPagado: Number(row.precio_pagado),
-    fecha: row.fecha,
-    entregaConfirmada: row.entrega_confirmada,
-    entregadoEn: row.entregado_en,
-    fondosLiberados: row.fondos_liberados,
-    fondosLiberadosEn: row.fondos_liberados_en,
+    tipo: row.tipo as TipoCompra,
+    estado: row.estado as Compra["estado"],
+    montoCentavos: monto,
+    moneda: row.moneda ?? "ARS",
+    precioPagado: monto === null ? null : centavosAPesos(monto),
+    fecha: row.fecha as string,
+    pagadaEn: row.pagada_en ?? null,
+    entregaConfirmada: row.entrega_confirmada ?? false,
+    entregadoEn: row.entregado_en ?? null,
+    fondosLiberados: row.fondos_liberados ?? false,
+    fondosLiberadosEn: row.fondos_liberados_en ?? null,
+    material: row.material_nombre ?? null,
   };
 }
 
 export const compraService = {
+  // descarga: crea la compra 'pendiente_pago' y la preference de Checkout Pro.
+  // fabricacion: solo crea el ancla; el pago se inicia al cerrarse el trato
+  // (POST /compras/:id/pagar) con el precio final negociado.
   async crear(
     disenoId: string,
     compradorId: string,
-  ): Promise<{ compra: Compra; tokenVerificacion: string }> {
-    const diseno = await disenoRepository.getById(disenoId);
-    if (!diseno || diseno.eliminado_en) {
-      throw new NotFoundError("Diseño no encontrado");
-    }
+    tipo: TipoCompra,
+    materialNombre?: string,
+  ): Promise<CrearCompraResultado> {
+    // La fabricación bloquea la fila del diseño hasta el INSERT: serializa contra el cambio de
+    // categoría a "Planos técnicos" (productService), que toma el mismo lock.
+    const { compra, materialElegido } = await withTransaction(
+      async (client) => {
+        const diseno =
+          tipo === "fabricacion"
+            ? await disenoRepository.lockById(client, disenoId)
+            : await disenoRepository.getById(disenoId, client);
+        if (!diseno || diseno.eliminado_en) {
+          throw new NotFoundError("Diseño no encontrado");
+        }
 
-    // Token de entrega/escrow: se genera server-side con 32 bytes de entropía,
-    // solo se persiste su hash SHA-256 y el valor en claro se devuelve una única
-    // vez en la respuesta de creación (nunca se loguea ni se vuelve a exponer).
-    const tokenPlano = crypto.randomBytes(32).toString("hex");
-    const tokenHash = hashToken(tokenPlano);
+        if (tipo === "descarga" && diseno.disenador_id === compradorId) {
+          throw new ConflictError("No podés comprar tu propio diseño");
+        }
 
-    const compra = await compraRepository.create({
-      idComprador: compradorId,
-      idModelo: diseno.id,
-      idDisenador: diseno.disenador_id,
-      precioPagado: Number(diseno.precio_base),
-      tokenVerificacionHash: tokenHash,
+        if (
+          tipo === "fabricacion" &&
+          esCategoriaPlano(diseno.categoria_nombre)
+        ) {
+          throw new ValidationError(MSG_PLANO_SIN_FABRICACION);
+        }
+        // El material, si se indica, debe ser uno de los materiales del diseño.
+        const material = materialNombre
+          ? await catalogoService.resolverMaterialDeDiseno(
+              diseno.id,
+              materialNombre,
+            )
+          : null;
+
+        const creada = await compraRepository.create(
+          {
+            idComprador: compradorId,
+            idModelo: diseno.id,
+            idDisenador: diseno.disenador_id,
+            tipo,
+            montoCentavos:
+              tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
+            materialId: material?.id ?? null,
+          },
+          client,
+        );
+        return { compra: creada, materialElegido: material };
+      },
+    );
+    const mapped = mapCompra({
+      ...compra,
+      material_nombre: materialElegido?.nombre,
     });
 
-    return { compra: mapCompra(compra), tokenVerificacion: tokenPlano };
+    if (tipo === "fabricacion") {
+      return { compra: mapped, initPoint: null };
+    }
+    const { initPoint } = await pagoService.iniciarPago(compra.id, compradorId);
+    return { compra: mapped, initPoint };
+  },
+
+  // Reintento de pago (preference vencida o abandonada) de una compra 'pendiente_pago'.
+  async pagar(compraId: string, compradorId: string) {
+    return pagoService.iniciarPago(compraId, compradorId);
   },
 
   async misCompras(compradorId: string): Promise<MisComprasItem[]> {
     const rows = await compraRepository.getMisCompras(compradorId);
-    return rows.map((row: any) => ({
+    return rows.map((row) => ({
       ...mapCompra(row),
+      ordenFabricacionId: row.orden_fabricacion_id ?? null,
+      ordenFabricacionEstado: row.orden_fabricacion_estado ?? null,
       diseno: {
         titulo: row.diseno_titulo,
         imagenUrl: row.diseno_imagen_url,
         formato: row.diseno_formato,
-        archivoUrl: row.diseno_archivo_url,
       },
     }));
   },
@@ -77,47 +151,20 @@ export const compraService = {
     if (row.id_comprador !== userId) {
       throw new ForbiddenError("No autorizado para descargar este archivo");
     }
-    return row.archivo_url;
-  },
-
-  async confirmarEntrega(
-    compraId: string,
-    tokenPlano: string,
-    userId: string,
-  ): Promise<Compra> {
-    const compra = await compraRepository.getById(compraId);
-    if (!compra) {
-      throw new NotFoundError("Compra no encontrada");
+    // El archivo digital solo se entrega con el pago acreditado; la compra de fabricación
+    // no incluye el archivo (lo recibe el fabricante).
+    if (row.tipo !== "descarga") {
+      throw new ForbiddenError(
+        "Esta compra no incluye la descarga del archivo",
+      );
     }
-
-    // IDOR check: solo el comprador dueño de la compra puede confirmar la entrega.
-    // Se verifica antes de revelar entrega_confirmada para no filtrar ese estado
-    // a terceros no autorizados que solo adivinaron el id de la compra.
-    if (compra.id_comprador !== userId) {
-      throw new ForbiddenError("No autorizado para confirmar esta entrega");
+    if (row.estado !== "pagada" && row.estado !== "completada") {
+      throw new ConflictError(
+        "El pago de esta compra todavía no fue acreditado",
+      );
     }
-
-    if (compra.entrega_confirmada) {
-      throw new ConflictError("La entrega ya fue confirmada anteriormente");
-    }
-
-    const tokenHashBuffer = Buffer.from(hashToken(tokenPlano), "utf8");
-    const storedHashBuffer = Buffer.from(
-      compra.token_verificacion_hash,
-      "utf8",
-    );
-
-    // Comparación en tiempo constante: evita timing attacks al validar el hash del
-    // token. La respuesta nunca distingue si falló por longitud o por contenido.
-    const coincide =
-      tokenHashBuffer.length === storedHashBuffer.length &&
-      crypto.timingSafeEqual(tokenHashBuffer, storedHashBuffer);
-
-    if (!coincide) {
-      throw new UnauthorizedError("Token de verificación inválido");
-    }
-
-    const actualizado = await compraRepository.confirmarEntrega(compraId);
-    return mapCompra({ ...compra, ...actualizado });
+    // Redirige a una URL firmada de 5 min (R2) o a un host de la allowlist (legacy).
+    return (await archivoService.firmarUrl(row.archivo_url, { adjunto: true }))
+      .url;
   },
 };

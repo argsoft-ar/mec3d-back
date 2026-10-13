@@ -51,10 +51,17 @@ export const getFabricantesCercanos = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const zonaId = req.query.zonaId
-      ? Number.parseInt(req.query.zonaId as string, 10)
-      : undefined;
-    const fabricantes = await usuarioService.getFabricantesCercanos(zonaId);
+    // zonaId, page y limit ya vienen validados y convertidos a number por el schema.
+    const { zonaId, page, limit } = req.query as unknown as {
+      zonaId?: number;
+      page: number;
+      limit: number;
+    };
+    const fabricantes = await usuarioService.getFabricantesCercanos(
+      zonaId,
+      page,
+      limit,
+    );
     res.status(200).json(fabricantes);
   } catch (error) {
     next(error);

@@ -5,7 +5,10 @@ import {
   uploadModelMiddleware,
 } from "../middlewares/upload.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
-import { uploadLimiter } from "../middlewares/rate-limit.middleware";
+import {
+  uploadConcurrencyLimiter,
+  uploadLimiter,
+} from "../middlewares/rate-limit.middleware";
 
 const router = Router();
 
@@ -13,8 +16,9 @@ const router = Router();
 // Multer interceptará el campo 'imagen' del form-data.
 router.post(
   "/imagen",
-  uploadLimiter,
   authenticateToken,
+  uploadLimiter,
+  uploadConcurrencyLimiter,
   uploadImageMiddleware.single("imagen"),
   uploadImage,
 );
@@ -23,8 +27,9 @@ router.post(
 // Multer interceptará el campo 'archivo' del form-data.
 router.post(
   "/modelo",
-  uploadLimiter,
   authenticateToken,
+  uploadLimiter,
+  uploadConcurrencyLimiter,
   uploadModelMiddleware.single("archivo"),
   uploadModel,
 );

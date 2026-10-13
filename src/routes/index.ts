@@ -9,6 +9,7 @@ import catalogoRoutes from "./catalogo.routes";
 import compraRoutes from "./compra.routes";
 import ordenFabricacionRoutes from "./orden-fabricacion.routes";
 import conversacionRoutes from "./chat.routes";
+import adminRoutes from "./admin.routes";
 
 const router = Router();
 
@@ -41,5 +42,8 @@ router.use("/ordenes-fabricacion", ordenFabricacionRoutes);
 
 // Rutas de conversaciones (historial de chat comprador-fabricante)
 router.use("/conversaciones", conversacionRoutes);
+
+// Administración de pagos (payouts pendientes, reintento de reembolsos): solo rol admin
+router.use("/admin", adminRoutes);
 
 export { router };

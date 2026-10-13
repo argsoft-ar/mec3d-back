@@ -74,8 +74,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Init schema en la rama preview
-        run: npm run db:init
+      - name: Init schema en la rama preview (DB descartable por PR)
+        run: npm run db:init -- --force
         env:
           DATABASE_URL: ${{ needs.create_neon_branch.outputs.db_url_with_pooler }}
           NODE_ENV: test
