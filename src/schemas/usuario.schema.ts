@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { zonaIdQuerySchema, fabricantesPaginationQuery } from "./common.schema";
+import {
+  zonaIdQuerySchema,
+  fabricantesPaginationQuery,
+  usernameSchema,
+  usernameFormatSchema,
+} from "./common.schema";
 import { esCuentaMercadopagoValida } from "../utils/policy.util";
 
 const sinDuplicados = (items: string[]) =>
@@ -21,12 +26,7 @@ export const updateProfileSchema = z.object({
           "cuentaMercadopago debe ser un CBU/CVU de 22 dígitos, un alias (6-20 caracteres) o un email",
       })
       .optional(),
-    username: z
-      .string()
-      .min(3)
-      .max(30)
-      .regex(/^\w+$/, "Solo letras, números y guion bajo")
-      .optional(),
+    username: usernameSchema.optional(),
     telefono: z.string().max(30).optional(),
     direccion: z.string().max(255).optional(),
   }),
@@ -34,11 +34,7 @@ export const updateProfileSchema = z.object({
 
 export const checkUsernameSchema = z.object({
   query: z.object({
-    username: z
-      .string()
-      .min(3)
-      .max(30)
-      .regex(/^\w+$/, "Solo letras, números y guion bajo"),
+    username: usernameFormatSchema,
   }),
 });
 

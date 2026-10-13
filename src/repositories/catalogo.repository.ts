@@ -51,7 +51,7 @@ export const catalogoRepository = {
     nombre: string,
   ): Promise<CategoriaCatalogoRow | null> {
     const result = await pool.query<CategoriaCatalogoRow>(
-      `SELECT id, nombre FROM categorias WHERE lower(nombre) = lower($1) LIMIT 1;`,
+      `SELECT id, nombre FROM categorias WHERE lower(nombre) = lower($1) ORDER BY id LIMIT 1;`,
       [nombre],
     );
     return result.rows[0] ?? null;

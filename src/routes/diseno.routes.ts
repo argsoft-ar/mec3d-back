@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getAllProducts,
+  getProductById,
   createProduct,
   updateProduct,
   partialUpdateProduct,
@@ -34,6 +35,9 @@ router.get(
 
 // Obtener todos los productos (público) - con paginación y orden por cercanía opcional
 router.get("/", validateSchema(listProductsSchema), getAllProducts);
+
+// Obtener un producto por id (público). Va después de /mis-disenos y /:id/archivo-preview.
+router.get("/:id", validateSchema(uuidParamSchema), getProductById);
 
 // Crear un producto (protegido por auth + Zod)
 router.post(

@@ -1,7 +1,9 @@
 // Montos siempre en centavos enteros de ARS (excepto precioPagado, en pesos solo para mostrar).
 const err = (description: string) => ({
   description,
-  content: { "application/json": { schema: { $ref: "#/components/schemas/ApiError" } } },
+  content: {
+    "application/json": { schema: { $ref: "#/components/schemas/ApiError" } },
+  },
 });
 
 const uuidParam = (description: string) => ({
@@ -25,7 +27,13 @@ export const pagoSchemaDoc = {
       tipo: { type: "string", enum: ["descarga", "fabricacion"] },
       estado: {
         type: "string",
-        enum: ["pendiente_pago", "pagada", "completada", "reembolsada", "cancelada"],
+        enum: [
+          "pendiente_pago",
+          "pagada",
+          "completada",
+          "reembolsada",
+          "cancelada",
+        ],
       },
       montoCentavos: {
         type: "integer",
@@ -40,7 +48,11 @@ export const pagoSchemaDoc = {
       entregaConfirmada: { type: "boolean" },
       entregadoEn: { type: "string", format: "date-time", nullable: true },
       fondosLiberados: { type: "boolean" },
-      fondosLiberadosEn: { type: "string", format: "date-time", nullable: true },
+      fondosLiberadosEn: {
+        type: "string",
+        format: "date-time",
+        nullable: true,
+      },
       material: { type: "string", nullable: true },
     },
   },
@@ -48,7 +60,10 @@ export const pagoSchemaDoc = {
     type: "object",
     properties: {
       id: { type: "string", format: "uuid" },
-      estado: { type: "string", enum: ["pendiente", "aprobado", "rechazado", "reembolsado"] },
+      estado: {
+        type: "string",
+        enum: ["pendiente", "aprobado", "rechazado", "reembolsado"],
+      },
       mpStatus: { type: "string", nullable: true, example: "approved" },
       montoCentavos: { type: "integer", example: 250000 },
       moneda: { type: "string", example: "ARS" },
@@ -64,11 +79,20 @@ export const pagoSchemaDoc = {
       tipo: { type: "string", enum: ["descarga", "fabricacion"] },
       estadoCompra: {
         type: "string",
-        enum: ["pendiente_pago", "pagada", "completada", "reembolsada", "cancelada"],
+        enum: [
+          "pendiente_pago",
+          "pagada",
+          "completada",
+          "reembolsada",
+          "cancelada",
+        ],
       },
       montoCentavos: { type: "integer", nullable: true },
       moneda: { type: "string", example: "ARS" },
-      pago: { allOf: [{ $ref: "#/components/schemas/PagoResumen" }], nullable: true },
+      pago: {
+        allOf: [{ $ref: "#/components/schemas/PagoResumen" }],
+        nullable: true,
+      },
     },
   },
   MovimientoBilletera: {
@@ -79,7 +103,10 @@ export const pagoSchemaDoc = {
         type: "string",
         enum: ["regalia_disenador", "pago_fabricante", "pago_disenador"],
       },
-      estado: { type: "string", enum: ["retenido", "pendiente_payout", "pagado"] },
+      estado: {
+        type: "string",
+        enum: ["retenido", "pendiente_payout", "pagado"],
+      },
       montoCentavos: { type: "integer", example: 873000 },
       compraId: { type: "string", format: "uuid" },
       ordenId: { type: "string", format: "uuid", nullable: true },
@@ -91,7 +118,10 @@ export const pagoSchemaDoc = {
   Billetera: {
     type: "object",
     properties: {
-      data: { type: "array", items: { $ref: "#/components/schemas/MovimientoBilletera" } },
+      data: {
+        type: "array",
+        items: { $ref: "#/components/schemas/MovimientoBilletera" },
+      },
       meta: { $ref: "#/components/schemas/PaginationMeta" },
       resumen: {
         type: "object",
@@ -131,7 +161,7 @@ export const pagoPaths = {
       tags: ["Pagos"],
       summary: "Crear una compra (descarga o ancla de fabricación)",
       description:
-        "descarga: crea la compra 'pendiente_pago' con monto = precio del diseño y devuelve el initPoint de Checkout Pro. fabricacion: solo crea la compra (monto null, initPoint null); el pago se habilita al cerrarse el trato. El monto nunca viene del cliente.",
+        "descarga: crea la compra 'pendiente_pago' con monto = precio del diseño y devuelve el initPoint de Checkout Pro. fabricacion: solo crea la compra (monto null, initPoint null); el pago se habilita al cerrarse el trato. El monto nunca viene del cliente. Los diseños de la categoría \"Planos técnicos\" solo admiten tipo descarga (fabricacion responde 400).",
       security: bearer,
       requestBody: {
         required: true,
@@ -143,7 +173,11 @@ export const pagoPaths = {
               properties: {
                 disenoId: { type: "string", format: "uuid" },
                 tipo: { type: "string", enum: ["descarga", "fabricacion"] },
-                material: { type: "string", description: "Solo fabricación; uno de los materiales del diseño" },
+                material: {
+                  type: "string",
+                  description:
+                    "Solo fabricación; uno de los materiales del diseño",
+                },
               },
             },
           },
@@ -158,13 +192,20 @@ export const pagoPaths = {
                 type: "object",
                 properties: {
                   compra: { $ref: "#/components/schemas/Compra" },
-                  initPoint: { type: "string", nullable: true, example: "https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=..." },
+                  initPoint: {
+                    type: "string",
+                    nullable: true,
+                    example:
+                      "https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=...",
+                  },
                 },
               },
             },
           },
         },
-        400: err("Datos inválidos"),
+        400: err(
+          "Datos inválidos, o fabricación solicitada sobre un plano técnico",
+        ),
         401: err("Token ausente o inválido"),
         404: err("Diseño no encontrado"),
         429: err("Demasiados intentos de pago"),
@@ -199,7 +240,9 @@ export const pagoPaths = {
         401: err("Token ausente o inválido"),
         403: err("La compra no es del usuario"),
         404: err("Compra no encontrada"),
-        409: err("La compra no está pendiente de pago o el trato no está cerrado"),
+        409: err(
+          "La compra no está pendiente de pago o el trato no está cerrado",
+        ),
         502: err("No se pudo crear la preference en Mercado Pago"),
         503: err("Pagos no configurados"),
       },
@@ -216,7 +259,11 @@ export const pagoPaths = {
       responses: {
         200: {
           description: "Estado de pago",
-          content: { "application/json": { schema: { $ref: "#/components/schemas/EstadoPago" } } },
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/EstadoPago" },
+            },
+          },
         },
         401: err("Token ausente o inválido"),
         403: err("La compra no es del usuario"),
@@ -233,12 +280,30 @@ export const pagoPaths = {
       security: [],
       parameters: [
         { name: "data.id", in: "query", schema: { type: "string" } },
-        { name: "type", in: "query", schema: { type: "string", example: "payment" } },
-        { name: "x-signature", in: "header", required: true, schema: { type: "string" } },
-        { name: "x-request-id", in: "header", required: true, schema: { type: "string" } },
+        {
+          name: "type",
+          in: "query",
+          schema: { type: "string", example: "payment" },
+        },
+        {
+          name: "x-signature",
+          in: "header",
+          required: true,
+          schema: { type: "string" },
+        },
+        {
+          name: "x-request-id",
+          in: "header",
+          required: true,
+          schema: { type: "string" },
+        },
       ],
       requestBody: {
-        content: { "application/json": { schema: { type: "object", additionalProperties: true } } },
+        content: {
+          "application/json": {
+            schema: { type: "object", additionalProperties: true },
+          },
+        },
       },
       responses: {
         200: {
@@ -248,7 +313,10 @@ export const pagoPaths = {
               schema: {
                 type: "object",
                 properties: {
-                  resultado: { type: "string", enum: ["procesado", "duplicado", "ignorado", "rechazado"] },
+                  resultado: {
+                    type: "string",
+                    enum: ["procesado", "duplicado", "ignorado", "rechazado"],
+                  },
                 },
               },
             },
@@ -268,18 +336,33 @@ export const pagoPaths = {
         "Movimientos propios (retenido, pendiente_payout, pagado) paginados y resumen en centavos. Nunca expone movimientos de otros usuarios ni de la plataforma.",
       security: bearer,
       parameters: [
-        { name: "page", in: "query", schema: { type: "integer", minimum: 1, default: 1 } },
-        { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 12 } },
+        {
+          name: "page",
+          in: "query",
+          schema: { type: "integer", minimum: 1, default: 1 },
+        },
+        {
+          name: "limit",
+          in: "query",
+          schema: { type: "integer", minimum: 1, maximum: 100, default: 12 },
+        },
         {
           name: "estado",
           in: "query",
-          schema: { type: "string", enum: ["retenido", "pendiente_payout", "pagado"] },
+          schema: {
+            type: "string",
+            enum: ["retenido", "pendiente_payout", "pagado"],
+          },
         },
       ],
       responses: {
         200: {
           description: "Billetera",
-          content: { "application/json": { schema: { $ref: "#/components/schemas/Billetera" } } },
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Billetera" },
+            },
+          },
         },
         400: err("Parámetros inválidos"),
         401: err("Token ausente o inválido"),
@@ -301,7 +384,13 @@ export const pagoPaths = {
             schema: {
               type: "object",
               required: ["precio"],
-              properties: { precio: { type: "number", description: "Pesos, hasta 2 decimales", example: 10000 } },
+              properties: {
+                precio: {
+                  type: "number",
+                  description: "Pesos, hasta 2 decimales",
+                  example: 10000,
+                },
+              },
             },
           },
         },
@@ -315,8 +404,14 @@ export const pagoPaths = {
                 type: "object",
                 properties: {
                   message: { type: "string" },
-                  data: { type: "object", description: "Orden de fabricación (incluye compraEstado)" },
-                  pagoRequerido: { type: "boolean", description: "true si este cierre finalizó el trato" },
+                  data: {
+                    type: "object",
+                    description: "Orden de fabricación (incluye compraEstado)",
+                  },
+                  pagoRequerido: {
+                    type: "boolean",
+                    description: "true si este cierre finalizó el trato",
+                  },
                   initPoint: { type: "string", nullable: true },
                 },
               },
@@ -347,7 +442,10 @@ export const pagoPaths = {
                 properties: {
                   message: { type: "string" },
                   data: { type: "object" },
-                  reembolso: { type: "string", enum: ["no_aplica", "reembolsado", "pendiente"] },
+                  reembolso: {
+                    type: "string",
+                    enum: ["no_aplica", "reembolsado", "pendiente"],
+                  },
                 },
               },
             },
@@ -366,7 +464,11 @@ export const pagoPaths = {
       security: bearer,
       parameters: [
         { name: "page", in: "query", schema: { type: "integer", default: 1 } },
-        { name: "limit", in: "query", schema: { type: "integer", default: 12, maximum: 100 } },
+        {
+          name: "limit",
+          in: "query",
+          schema: { type: "integer", default: 12, maximum: 100 },
+        },
       ],
       responses: {
         200: {
@@ -376,7 +478,10 @@ export const pagoPaths = {
               schema: {
                 type: "object",
                 properties: {
-                  data: { type: "array", items: { $ref: "#/components/schemas/PayoutPendiente" } },
+                  data: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/PayoutPendiente" },
+                  },
                   meta: { $ref: "#/components/schemas/PaginationMeta" },
                 },
               },
@@ -401,7 +506,13 @@ export const pagoPaths = {
             schema: {
               type: "object",
               required: ["referencia"],
-              properties: { referencia: { type: "string", maxLength: 255, example: "Transferencia 0001234" } },
+              properties: {
+                referencia: {
+                  type: "string",
+                  maxLength: 255,
+                  example: "Transferencia 0001234",
+                },
+              },
             },
           },
         },

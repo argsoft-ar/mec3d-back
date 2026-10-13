@@ -1,5 +1,5 @@
-import type { PoolClient } from "pg";
 import pool from "../config/db.config";
+import { Db, withTransaction } from "../utils/transaction.util";
 
 const COLUMN_MAP: Record<string, string> = {
   imagenUrl: "imagen_url",
@@ -53,25 +53,16 @@ interface DisenoEspecificaciones {
   };
 }
 
-async function withTransaction<T>(
-  fn: (client: PoolClient) => Promise<T>,
+// Con `db` (cliente de una transacción del caller) participa de ella; sin él abre la propia.
+function enTransaccion<T>(
+  db: Db | undefined,
+  fn: (client: Db) => Promise<T>,
 ): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await fn(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  return db ? fn(db) : withTransaction(fn);
 }
 
 async function replaceMateriales(
-  client: PoolClient,
+  client: Db,
   disenoId: string,
   materialIds: number[],
 ): Promise<void> {
@@ -147,7 +138,7 @@ export const disenoRepository = {
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
       LEFT JOIN categorias c ON d.categoria_id = c.id
-      JOIN tecnologias t ON t.id = d.tecnologia_id
+      LEFT JOIN tecnologias t ON t.id = d.tecnologia_id
       WHERE d.eliminado_en IS NULL
       ${categoriaParamIndex !== null ? `AND c.nombre = $${categoriaParamIndex}` : ""}
       ${zona ? orderByZona : "ORDER BY d.creado_en DESC"}
@@ -183,7 +174,7 @@ export const disenoRepository = {
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
       LEFT JOIN categorias c ON d.categoria_id = c.id
-      JOIN tecnologias t ON t.id = d.tecnologia_id
+      LEFT JOIN tecnologias t ON t.id = d.tecnologia_id
       WHERE d.id = $1 AND d.eliminado_en IS NULL;
     `;
     const result = await pool.query(query, [id]);
@@ -201,7 +192,7 @@ export const disenoRepository = {
     formato?: string;
     especificaciones?: DisenoEspecificaciones;
     categoriaId: number | null;
-    tecnologiaId: number;
+    tecnologiaId: number | null;
     materialIds: number[];
   }) {
     return withTransaction(async (client) => {
@@ -248,11 +239,12 @@ export const disenoRepository = {
       formato?: string;
       especificaciones?: DisenoEspecificaciones;
       categoriaId: number | null;
-      tecnologiaId: number;
+      tecnologiaId: number | null;
       materialIds: number[];
     },
+    db?: Db,
   ) {
-    return withTransaction(async (client) => {
+    return enTransaccion(db, async (client) => {
       const query = `
         UPDATE disenos
         SET titulo = $1, descripcion = $2, imagen_url = $3, archivo_url = $4,
@@ -290,8 +282,9 @@ export const disenoRepository = {
     disenadorId: string,
     updates: Record<string, unknown>,
     materialIds?: number[],
+    db?: Db,
   ) {
-    return withTransaction(async (client) => {
+    return enTransaccion(db, async (client) => {
       const fields: string[] = [];
       const values: unknown[] = [];
       let queryIndex = 1;
@@ -349,9 +342,28 @@ export const disenoRepository = {
     return result.rows[0];
   },
 
-  async getById(id: string) {
-    const query = `SELECT * FROM disenos WHERE id = $1;`;
-    const result = await pool.query(query, [id]);
+  async getById(id: string, db: Db = pool) {
+    // categoria_nombre permite decidir reglas por categoría (planos técnicos) sin otra consulta.
+    const query = `
+      SELECT d.*, c.nombre AS categoria_nombre
+      FROM disenos d
+      LEFT JOIN categorias c ON c.id = d.categoria_id
+      WHERE d.id = $1;`;
+    const result = await db.query(query, [id]);
+    return result.rows[0] ?? null;
+  },
+
+  // Lock de fila del diseño dentro de una transacción: serializa el cambio a "Planos técnicos"
+  // con la creación de compras de fabricación. Devuelve la misma forma que getById.
+  async lockById(db: Db, id: string) {
+    const result = await db.query(
+      `SELECT d.*, c.nombre AS categoria_nombre
+       FROM disenos d
+       LEFT JOIN categorias c ON c.id = d.categoria_id
+       WHERE d.id = $1
+       FOR UPDATE OF d;`,
+      [id],
+    );
     return result.rows[0] ?? null;
   },
 
@@ -407,7 +419,7 @@ export const disenoRepository = {
       FROM disenos d
       JOIN usuarios u ON d.disenador_id = u.id
       LEFT JOIN categorias c ON d.categoria_id = c.id
-      JOIN tecnologias t ON t.id = d.tecnologia_id
+      LEFT JOIN tecnologias t ON t.id = d.tecnologia_id
       WHERE d.disenador_id = $1 AND d.eliminado_en IS NULL;
     `;
     const result = await pool.query(query, [designerId]);

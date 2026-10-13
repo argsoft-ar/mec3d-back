@@ -57,6 +57,23 @@ export const ordenFabricacionRepository = {
     return result.rows[0] ?? null;
   },
 
+  // ¿Hay órdenes de fabricación activas (ni canceladas, rechazadas ni completadas) sobre el diseño?
+  async existeActivaPorDiseno(
+    disenoId: string,
+    db: Db = pool,
+  ): Promise<boolean> {
+    const result = await db.query<{ existe: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM ordenes_fabricacion o
+         JOIN compras c ON c.id = o.compra_id
+         WHERE c.id_modelo = $1
+           AND o.estado NOT IN ('cancelado', 'rechazado', 'completado')
+       ) AS existe;`,
+      [disenoId],
+    );
+    return result.rows[0].existe;
+  },
+
   // Se trae id_comprador de la compra asociada para poder resolver el rol del
   // solicitante (comprador o fabricante) sin un join extra en cada consumidor.
   async getById(id: string, db: Db = pool) {

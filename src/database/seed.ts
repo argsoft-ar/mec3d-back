@@ -332,6 +332,25 @@ import { guardOrExit } from "./guard";
           configuracion: { layer: "0.15mm", infill: "40%" },
         },
       },
+      // Plano técnico: solo descarga, sin tecnología, materiales ni especificaciones.
+      {
+        disenador: "ana@mec3d.com",
+        titulo: "Plano de Engranaje Planetario",
+        descripcion:
+          "Plano técnico acotado del engranaje planetario modular (vistas y tolerancias).",
+        categoria: "Planos técnicos",
+        archivo_url:
+          "https://storage.mec3d.com/files/plano-engranaje-planetario.pdf",
+        imagen_url: "https://placehold.co/600x400?text=Plano+Engranaje",
+        precio_base: 500,
+        rating: 0,
+        review_count: 0,
+        descargas: 0,
+        formato: "PDF",
+        tecnologia: null,
+        materiales: [],
+        especificaciones: null,
+      },
     ];
 
     for (const d of disenos) {
@@ -360,7 +379,7 @@ import { guardOrExit } from "./guard";
           d.review_count,
           d.descargas,
           d.formato,
-          JSON.stringify(d.especificaciones),
+          d.especificaciones ? JSON.stringify(d.especificaciones) : null,
           d.tecnologia,
         ],
       );

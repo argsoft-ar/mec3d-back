@@ -29,7 +29,8 @@ export interface Product {
   price: number;
   format: string;
   categoria?: string;
-  tecnologia: string;
+  // null (y materiales []) en planos técnicos sin tecnología.
+  tecnologia: string | null;
   materiales: string[];
   archivoUrl?: string;
   specs: ProductSpecificaciones | null;
@@ -45,8 +46,9 @@ export interface CreateProductDTO {
   precioBase: number;
   formato?: string;
   categoria?: string;
-  tecnologia: string;
-  materiales: string[];
+  // Obligatorios salvo en la categoría "Planos técnicos".
+  tecnologia?: string;
+  materiales?: string[];
   especificaciones?: ProductSpecificaciones;
 }
 

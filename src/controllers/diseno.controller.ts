@@ -24,6 +24,19 @@ export const getAllProducts = async (
   }
 };
 
+export const getProductById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const product = await productService.getPublicById(req.params.id);
+    res.status(200).json(product);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const createProduct = async (
   req: Request,
   res: Response,

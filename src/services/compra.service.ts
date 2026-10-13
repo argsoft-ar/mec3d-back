@@ -10,12 +10,18 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  ValidationError,
 } from "../errors/app-error";
 import {
   centavosAPesos,
   pesosACentavos,
   toCentavos,
 } from "../utils/money.util";
+import { withTransaction } from "../utils/transaction.util";
+import {
+  esCategoriaPlano,
+  MSG_PLANO_SIN_FABRICACION,
+} from "../utils/plano.util";
 import { catalogoService } from "./catalogo.service";
 import { pagoService } from "./pago.service";
 import { archivoService } from "./archivo.service";
@@ -58,31 +64,53 @@ export const compraService = {
     disenoId: string,
     compradorId: string,
     tipo: TipoCompra,
-    material?: string,
+    materialNombre?: string,
   ): Promise<CrearCompraResultado> {
-    const diseno = await disenoRepository.getById(disenoId);
-    if (!diseno || diseno.eliminado_en) {
-      throw new NotFoundError("Diseño no encontrado");
-    }
+    // La fabricación bloquea la fila del diseño hasta el INSERT: serializa contra el cambio de
+    // categoría a "Planos técnicos" (productService), que toma el mismo lock.
+    const { compra, materialElegido } = await withTransaction(
+      async (client) => {
+        const diseno =
+          tipo === "fabricacion"
+            ? await disenoRepository.lockById(client, disenoId)
+            : await disenoRepository.getById(disenoId, client);
+        if (!diseno || diseno.eliminado_en) {
+          throw new NotFoundError("Diseño no encontrado");
+        }
 
-    if (tipo === "descarga" && diseno.disenador_id === compradorId) {
-      throw new ConflictError("No podés comprar tu propio diseño");
-    }
+        if (tipo === "descarga" && diseno.disenador_id === compradorId) {
+          throw new ConflictError("No podés comprar tu propio diseño");
+        }
 
-    // El material, si se indica, debe ser uno de los materiales del diseño.
-    const materialElegido = material
-      ? await catalogoService.resolverMaterialDeDiseno(diseno.id, material)
-      : null;
+        if (
+          tipo === "fabricacion" &&
+          esCategoriaPlano(diseno.categoria_nombre)
+        ) {
+          throw new ValidationError(MSG_PLANO_SIN_FABRICACION);
+        }
+        // El material, si se indica, debe ser uno de los materiales del diseño.
+        const material = materialNombre
+          ? await catalogoService.resolverMaterialDeDiseno(
+              diseno.id,
+              materialNombre,
+            )
+          : null;
 
-    const compra = await compraRepository.create({
-      idComprador: compradorId,
-      idModelo: diseno.id,
-      idDisenador: diseno.disenador_id,
-      tipo,
-      montoCentavos:
-        tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
-      materialId: materialElegido?.id ?? null,
-    });
+        const creada = await compraRepository.create(
+          {
+            idComprador: compradorId,
+            idModelo: diseno.id,
+            idDisenador: diseno.disenador_id,
+            tipo,
+            montoCentavos:
+              tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
+            materialId: material?.id ?? null,
+          },
+          client,
+        );
+        return { compra: creada, materialElegido: material };
+      },
+    );
     const mapped = mapCompra({
       ...compra,
       material_nombre: materialElegido?.nombre,
@@ -136,6 +164,7 @@ export const compraService = {
       );
     }
     // Redirige a una URL firmada de 5 min (R2) o a un host de la allowlist (legacy).
-    return (await archivoService.firmarUrl(row.archivo_url)).url;
+    return (await archivoService.firmarUrl(row.archivo_url, { adjunto: true }))
+      .url;
   },
 };

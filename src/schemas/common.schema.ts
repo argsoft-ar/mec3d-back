@@ -1,4 +1,21 @@
 import { z } from "zod";
+import { isReservedUsername } from "../utils/username.util";
+
+// Solo formato (normaliza a minúsculas); los endpoints de disponibilidad lo usan para
+// responder { disponible: false } en nombres reservados en vez de 400.
+export const usernameFormatSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, "El nombre de usuario debe tener al menos 3 caracteres")
+  .max(30, "El nombre de usuario no puede superar los 30 caracteres")
+  .regex(/^\w+$/, "Solo letras, números y guion bajo");
+
+// Regla única de username para registro y perfil.
+export const usernameSchema = usernameFormatSchema.refine(
+  (v) => !isReservedUsername(v),
+  { message: "Nombre de usuario no disponible" },
+);
 
 // Schema para validar UUID en params
 export const uuidParamSchema = z.object({

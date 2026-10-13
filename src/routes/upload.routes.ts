@@ -5,7 +5,10 @@ import {
   uploadModelMiddleware,
 } from "../middlewares/upload.middleware";
 import { authenticateToken } from "../middlewares/auth.middleware";
-import { uploadLimiter } from "../middlewares/rate-limit.middleware";
+import {
+  uploadConcurrencyLimiter,
+  uploadLimiter,
+} from "../middlewares/rate-limit.middleware";
 
 const router = Router();
 
@@ -15,6 +18,7 @@ router.post(
   "/imagen",
   authenticateToken,
   uploadLimiter,
+  uploadConcurrencyLimiter,
   uploadImageMiddleware.single("imagen"),
   uploadImage,
 );
@@ -25,6 +29,7 @@ router.post(
   "/modelo",
   authenticateToken,
   uploadLimiter,
+  uploadConcurrencyLimiter,
   uploadModelMiddleware.single("archivo"),
   uploadModel,
 );

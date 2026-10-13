@@ -52,6 +52,22 @@ export const compraRepository = {
     return result.rows[0] ?? null;
   },
 
+  // ¿Hay compras de fabricación sin resolver (pendiente_pago / pagada) sobre el diseño?
+  async existeFabricacionEnCurso(
+    disenoId: string,
+    db: Db = pool,
+  ): Promise<boolean> {
+    const result = await db.query<{ existe: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM compras
+         WHERE id_modelo = $1 AND tipo = 'fabricacion'
+           AND estado IN ('pendiente_pago', 'pagada')
+       ) AS existe;`,
+      [disenoId],
+    );
+    return result.rows[0].existe;
+  },
+
   async getMisCompras(compradorId: string) {
     const query = `
       SELECT

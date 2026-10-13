@@ -49,9 +49,35 @@ export const LEDGER_TRIGGER_SQL = `
     EXECUTE FUNCTION fn_verificar_ledger_pago();
 `;
 
+// Unicidad case-insensitive de username. Si ya hay duplicados no rompe el arranque: avisa y omite
+// el índice. migrate.ts lo reintenta en cada deploy (idempotente) hasta que se resuelvan.
+export const USERNAME_LOWER_INDEX_SQL = `
+  DO $mig$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM usuarios WHERE username IS NOT NULL
+      GROUP BY lower(username) HAVING count(*) > 1
+    ) THEN
+      RAISE WARNING 'uq_usuarios_username_lower omitido: hay usernames duplicados ignorando mayúsculas; resolvelos y volvé a correr la migración';
+    ELSE
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_usuarios_username_lower ON usuarios (lower(username));
+    END IF;
+  END
+  $mig$;
+`;
+
+// El catálogo resuelve categorías con lower(nombre): el índice garantiza que no haya dos
+// que difieran solo en mayúsculas. Falla (y revierte el deploy) si ya existieran duplicados.
+export const CATEGORIAS_NOMBRE_LOWER_INDEX_SQL = `
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_nombre_lower ON categorias (lower(nombre));
+`;
+
 // 1 = esquema con ledger de pagos y código de entrega HMAC (anterior al versionado).
 // 2 = hardening: uploads, disputas, retención de payouts, cooldown de cuenta, reintentos de
 //     webhook, invariantes del ledger. Todas las sentencias son idempotentes.
+// 3 = unicidad case-insensitive de username.
+// 4 = planos técnicos: disenos.tecnologia_id nullable y categoría 'Planos técnicos'.
+// 5 = unicidad case-insensitive del nombre de categoría (el catálogo se resuelve con lower()).
 export const MIGRATIONS: Migration[] = [
   { version: 1, nombre: "esquema_base", sql: "" },
   {
@@ -158,6 +184,27 @@ export const MIGRATIONS: Migration[] = [
 
       ${LEDGER_TRIGGER_SQL}
     `,
+  },
+  {
+    version: 3,
+    nombre: "username_unico_case_insensitive",
+    sql: USERNAME_LOWER_INDEX_SQL,
+  },
+  {
+    version: 4,
+    nombre: "planos_tecnicos",
+    sql: `
+      ALTER TABLE disenos ALTER COLUMN tecnologia_id DROP NOT NULL;
+
+      INSERT INTO categorias (nombre, descripcion) VALUES
+        ('Planos técnicos', 'Planos técnicos en PDF, DWG o DXF (solo descarga, sin fabricación)')
+      ON CONFLICT (nombre) DO NOTHING;
+    `,
+  },
+  {
+    version: 5,
+    nombre: "categorias_nombre_unico_lower",
+    sql: CATEGORIAS_NOMBRE_LOWER_INDEX_SQL,
   },
 ];
 

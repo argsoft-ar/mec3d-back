@@ -1,5 +1,10 @@
-import type { Request } from "express";
+import type { Request, RequestHandler } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import { TooManyRequestsError } from "../errors/app-error";
+import {
+  getUploadMaxConcurrentGlobal,
+  getUploadMaxConcurrentPerUser,
+} from "../utils/policy.util";
 
 // Limiters de rutas autenticadas: cuentan por usuario (no por IP, que en redes compartidas
 // penaliza a terceros y permite rotar IPs); sin sesión caen a la IP.
@@ -21,6 +26,24 @@ export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 5,
   message: { error: "Demasiados intentos de login, intente más tarde" },
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const registroLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 10,
+  message: { error: "Demasiados intentos de registro, intente más tarde" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Chequeo de disponibilidad público (se dispara al tipear, con debounce): más holgado que authLimiter.
+export const usernameCheckLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 30,
+  message: { error: "Demasiadas consultas, intente más tarde" },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -33,6 +56,51 @@ export const uploadLimiter = rateLimit({
   keyGenerator: userKeyGenerator,
   legacyHeaders: false,
 });
+
+// Tope de subidas simultáneas (cada una bufferiza hasta 30 MB en memoria), por usuario y
+// global. Va antes de multer para rechazar sin leer el cuerpo; el cupo se libera al terminar
+// la respuesta (finish) o cortarse la conexión (close/error). Contadores en memoria de la instancia.
+export function createUploadConcurrencyLimiter(
+  getLimits: () => { porUsuario: number; global: number } = () => ({
+    porUsuario: getUploadMaxConcurrentPerUser(),
+    global: getUploadMaxConcurrentGlobal(),
+  }),
+): RequestHandler {
+  let total = 0;
+  const porClave = new Map<string, number>();
+
+  return (req, res, next) => {
+    const limites = getLimits();
+    const clave = userKeyGenerator(req);
+    const delUsuario = porClave.get(clave) ?? 0;
+    if (total >= limites.global || delUsuario >= limites.porUsuario) {
+      next(
+        new TooManyRequestsError(
+          "Hay demasiadas subidas en curso, intente nuevamente en unos segundos",
+        ),
+      );
+      return;
+    }
+
+    total++;
+    porClave.set(clave, delUsuario + 1);
+    let liberada = false;
+    const liberar = () => {
+      if (liberada) return;
+      liberada = true;
+      total--;
+      const restantes = (porClave.get(clave) ?? 1) - 1;
+      if (restantes > 0) porClave.set(clave, restantes);
+      else porClave.delete(clave);
+    };
+    res.once("finish", liberar);
+    res.once("close", liberar);
+    res.once("error", liberar);
+    next();
+  };
+}
+
+export const uploadConcurrencyLimiter = createUploadConcurrencyLimiter();
 
 export const cerrarTratoLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos

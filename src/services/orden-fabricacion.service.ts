@@ -16,6 +16,10 @@ import {
 } from "../utils/delivery-code.util";
 import { getDeliveryCodeSecret } from "../config/env.config";
 import { getDeliveryTimeoutDays } from "../utils/policy.util";
+import {
+  esCategoriaPlano,
+  MSG_PLANO_SIN_FABRICACION,
+} from "../utils/plano.util";
 import { catalogoService } from "./catalogo.service";
 import { pagoService } from "./pago.service";
 import { archivoService } from "./archivo.service";
@@ -154,6 +158,16 @@ export const ordenFabricacionService = {
     }
     assertCompraAbiertaParaFabricacion(compra);
 
+    // Ninguna vía de fabricación admite planos técnicos (también cubre compras previas a que
+    // el diseño pasara a esa categoría).
+    const diseno = await disenoRepository.getById(compra.id_modelo);
+    if (!diseno) {
+      throw new NotFoundError("Diseño no encontrado");
+    }
+    if (esCategoriaPlano(diseno.categoria_nombre)) {
+      throw new ValidationError(MSG_PLANO_SIN_FABRICACION);
+    }
+
     if (fabricanteIds.includes(compradorId)) {
       throw new ValidationError(
         "No podés solicitarte la fabricación a vos mismo",
@@ -175,10 +189,6 @@ export const ordenFabricacionService = {
 
     // Compatibilidad: el fabricante debe tener la tecnología del diseño y poder fabricar
     // en el material elegido en la compra (o, si no se eligió, en alguno de los del diseño).
-    const diseno = await disenoRepository.getById(compra.id_modelo);
-    if (!diseno) {
-      throw new NotFoundError("Diseño no encontrado");
-    }
     const materialIds: number[] = compra.material_id
       ? [compra.material_id]
       : (await catalogoService.getMaterialesDeDiseno(diseno.id)).map(
@@ -270,6 +280,9 @@ export const ordenFabricacionService = {
     const diseno = await disenoRepository.getByIdWithDesigner(disenoId);
     if (!diseno) {
       throw new NotFoundError("Diseño no encontrado");
+    }
+    if (esCategoriaPlano(diseno.categoria_nombre)) {
+      throw new ValidationError(MSG_PLANO_SIN_FABRICACION);
     }
 
     const zonaId: number | null = diseno.designer_zona_id ?? null;
@@ -413,6 +426,11 @@ export const ordenFabricacionService = {
       }
       if (compra.tipo !== "fabricacion" || compra.estado !== "pendiente_pago") {
         throw new ConflictError("La compra ya no admite el cierre de un trato");
+      }
+      // El diseño pudo pasar a "Planos técnicos" después de crearse la compra/orden.
+      const disenoDeLaCompra = await disenoRepository.getById(compra.id_modelo);
+      if (esCategoriaPlano(disenoDeLaCompra?.categoria_nombre)) {
+        throw new ValidationError(MSG_PLANO_SIN_FABRICACION);
       }
 
       const marcada = await ordenFabricacionRepository.marcarCierre(

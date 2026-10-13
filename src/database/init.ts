@@ -2,6 +2,7 @@ import pool from "../config/db.config";
 import { CATALOGO_SEED_SQL } from "./catalogo.seed";
 import { guardOrExit } from "./guard";
 import {
+  CATEGORIAS_NOMBRE_LOWER_INDEX_SQL,
   LEDGER_TRIGGER_SQL,
   SCHEMA_MIGRATIONS_DDL,
   SCHEMA_VERSIONS_SQL,
@@ -62,6 +63,7 @@ export const SCHEMA_SQL = `
   );
   CREATE INDEX idx_usuarios_rol ON usuarios (rol_principal);
   CREATE INDEX idx_usuarios_zona ON usuarios (zona_id);
+  CREATE UNIQUE INDEX uq_usuarios_username_lower ON usuarios (lower(username));
 
   -- Archivos subidos por la plataforma y quién los subió: un diseño solo puede referenciar
   -- uploads propios. key = clave del objeto en R2 (modelo) o public_id de Cloudinary (imagen).
@@ -125,6 +127,7 @@ export const SCHEMA_SQL = `
     nombre VARCHAR(100) UNIQUE NOT NULL,
     descripcion TEXT
   );
+  ${CATEGORIAS_NOMBRE_LOWER_INDEX_SQL}
 
   -- ── Diseños ────────────────────────────────────────────────────────────────
   CREATE TABLE disenos (
@@ -141,7 +144,8 @@ export const SCHEMA_SQL = `
     descargas INTEGER DEFAULT 0,
     formato VARCHAR(50),
     especificaciones JSONB,
-    tecnologia_id INTEGER NOT NULL,
+    -- NULL solo en planos técnicos (categoría 'Planos técnicos'); el resto la exige (se valida en el service).
+    tecnologia_id INTEGER,
     -- Soft-delete: las compras referencian el diseño, no se borra físicamente.
     eliminado_en TIMESTAMP NULL,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -436,7 +440,8 @@ export const REFERENCE_DATA_SQL = `
     ('Barcos', 'Partes náuticas y marinas'),
     ('Casa', 'Herrajes, cerraduras y más'),
     ('Maquinas', 'Piezas industriales y de producción'),
-    ('Engranajes', 'Transmisiones, poleas y sistemas mecánicos')
+    ('Engranajes', 'Transmisiones, poleas y sistemas mecánicos'),
+    ('Planos técnicos', 'Planos técnicos en PDF, DWG o DXF (solo descarga, sin fabricación)')
   ON CONFLICT (nombre) DO NOTHING;
 
   INSERT INTO configuracion_comisiones (clave, valor_bps, descripcion) VALUES

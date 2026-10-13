@@ -8,31 +8,61 @@ import {
   LoginResponse,
 } from "../interfaces/auth.interface";
 import { ConflictError, UnauthorizedError } from "../errors/app-error";
+import { isReservedUsername } from "../utils/username.util";
+import { SALT_ROUNDS } from "../utils/password.util";
 
-const SALT_ROUNDS = 12; // OWASP ASVS recomienda >=12 para bcrypt
+const USERNAME_TAKEN_MESSAGE = "El nombre de usuario no está disponible";
+const EMAIL_TAKEN_MESSAGE = "El email ya está registrado";
+
+// Mapea la violación UNIQUE (carrera entre el chequeo y el INSERT) sin exponer detalles de BD.
+function mapUniqueViolation(error: unknown): ConflictError | null {
+  const { code, constraint } = (error ?? {}) as {
+    code?: string;
+    constraint?: string;
+  };
+  if (code !== "23505") return null;
+  if (constraint?.includes("username")) {
+    return new ConflictError(USERNAME_TAKEN_MESSAGE);
+  }
+  if (constraint?.includes("email")) {
+    return new ConflictError(EMAIL_TAKEN_MESSAGE);
+  }
+  return null;
+}
 
 export const authService = {
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    const { email, password, rolPrincipal, zonaId, georefLocalidadId } = data;
+    const { email, username, password, rolPrincipal, zonaId, georefLocalidadId } =
+      data;
     const normalizedEmail = email.trim().toLowerCase();
 
     // Verificar si el usuario ya existe
     const existingUser = await userRepository.findByEmail(normalizedEmail);
     if (existingUser) {
-      throw new ConflictError("El email ya está registrado");
+      throw new ConflictError(EMAIL_TAKEN_MESSAGE);
+    }
+
+    if (await userRepository.isUsernameTaken(username)) {
+      throw new ConflictError(USERNAME_TAKEN_MESSAGE);
     }
 
     // Encriptar la contraseña usando bcrypt
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     // Guardar en la base de datos
-    const newUser = await userRepository.createUser({
-      email: normalizedEmail,
-      passwordHash,
-      rolPrincipal,
-      zonaId,
-      georefLocalidadId,
-    });
+    let newUser;
+    try {
+      newUser = await userRepository.createUser({
+        email: normalizedEmail,
+        username,
+        passwordHash,
+        rolPrincipal,
+        zonaId,
+        georefLocalidadId,
+      });
+    } catch (error) {
+      throw mapUniqueViolation(error) ?? error;
+    }
 
     // Mapear respuesta de BD (snake_case) a camelCase
     return {
@@ -40,11 +70,20 @@ export const authService = {
       user: {
         id: newUser.id,
         email: newUser.email,
+        username: newUser.username,
         rolPrincipal: newUser.rol_principal,
         zonaId: newUser.zona_id,
         creadoEn: newUser.creado_en,
       },
     };
+  },
+
+  async checkUsernameDisponible(
+    username: string,
+  ): Promise<{ disponible: boolean }> {
+    if (isReservedUsername(username)) return { disponible: false };
+    const taken = await userRepository.isUsernameTaken(username);
+    return { disponible: !taken };
   },
 
   async login(data: LoginRequest): Promise<LoginResponse> {

@@ -36,6 +36,34 @@ export function getDeliveryTimeoutDays(
   return dias === 0 ? DEFAULT_DELIVERY_TIMEOUT_DAYS : dias;
 }
 
+// Subidas simultáneas en curso (cada una bufferiza hasta 30 MB en memoria).
+export const DEFAULT_UPLOAD_MAX_CONCURRENT_PER_USER = 2;
+export const DEFAULT_UPLOAD_MAX_CONCURRENT_GLOBAL = 10;
+
+export function getUploadMaxConcurrentPerUser(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  return (
+    enteroNoNegativo(
+      env.UPLOAD_MAX_CONCURRENT_PER_USER,
+      DEFAULT_UPLOAD_MAX_CONCURRENT_PER_USER,
+      100,
+    ) || DEFAULT_UPLOAD_MAX_CONCURRENT_PER_USER
+  );
+}
+
+export function getUploadMaxConcurrentGlobal(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  return (
+    enteroNoNegativo(
+      env.UPLOAD_MAX_CONCURRENT_GLOBAL,
+      DEFAULT_UPLOAD_MAX_CONCURRENT_GLOBAL,
+      1000,
+    ) || DEFAULT_UPLOAD_MAX_CONCURRENT_GLOBAL
+  );
+}
+
 // ── Cuenta de Mercado Pago del vendedor ──────────────────────────────────────
 // CBU/CVU: 22 dígitos. Alias: 6-20 caracteres [a-zA-Z0-9.-]. O un email.
 const CBU_CVU_RE = /^\d{22}$/;

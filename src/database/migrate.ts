@@ -1,6 +1,6 @@
 import pool from "../config/db.config";
 import { SCHEMA_SQL, REFERENCE_DATA_SQL } from "./init";
-import { MIGRATIONS, SCHEMA_MIGRATIONS_DDL } from "./migrations";
+import { MIGRATIONS, SCHEMA_MIGRATIONS_DDL, USERNAME_LOWER_INDEX_SQL } from "./migrations";
 
 // Bootstrap no destructivo que corre el deploy, con versionado en schema_migrations:
 //   - DB vacía          -> crea el esquema completo (init.ts ya registra todas las versiones).
@@ -13,6 +13,7 @@ const MIGRATE_LOCK_KEY = 7_303_002;
 
 const migrate = async () => {
   const client = await pool.connect();
+  client.on("notice", (n) => console.warn(`⚠️ ${n.message}`));
   let failed = false;
   try {
     // Las migraciones pueden tardar más que el statement_timeout de runtime.
@@ -65,6 +66,7 @@ const migrate = async () => {
     }
 
     await client.query(REFERENCE_DATA_SQL);
+    await client.query(USERNAME_LOWER_INDEX_SQL);
     await client.query("COMMIT");
     console.log("✅ Base de datos lista");
   } catch (error) {

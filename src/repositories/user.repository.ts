@@ -19,19 +19,21 @@ export const userRepository = {
 
   async createUser(userData: {
     email: string;
+    username: string;
     passwordHash: string;
     rolPrincipal: string;
     zonaId?: number;
     georefLocalidadId?: string;
   }) {
     const query = `
-      INSERT INTO usuarios (email, password_hash, rol_principal, zona_id, georef_localidad_id)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, email, rol_principal, zona_id, creado_en;
+      INSERT INTO usuarios (email, username, password_hash, rol_principal, zona_id, georef_localidad_id)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, email, username, rol_principal, zona_id, creado_en;
     `;
 
     const values = [
       userData.email,
+      userData.username,
       userData.passwordHash,
       userData.rolPrincipal,
       userData.zonaId || null,
@@ -153,8 +155,8 @@ export const userRepository = {
     excludeUserId?: string,
   ): Promise<boolean> {
     const query = excludeUserId
-      ? `SELECT 1 FROM usuarios WHERE username = $1 AND id != $2 LIMIT 1;`
-      : `SELECT 1 FROM usuarios WHERE username = $1 LIMIT 1;`;
+      ? `SELECT 1 FROM usuarios WHERE lower(username) = $1 AND id != $2 LIMIT 1;`
+      : `SELECT 1 FROM usuarios WHERE lower(username) = $1 LIMIT 1;`;
     const values = excludeUserId ? [username, excludeUserId] : [username];
     const result = await pool.query(query, values);
     return (result.rowCount ?? 0) > 0;

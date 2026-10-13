@@ -6,6 +6,7 @@ import {
   ConflictError,
 } from "../errors/app-error";
 import { getProvinciaPrefix } from "../utils/zona.util";
+import { isReservedUsername } from "../utils/username.util";
 import { withTransaction } from "../utils/transaction.util";
 import { cuentaEnCooldown, cuentaHabilitadaDesde } from "../utils/policy.util";
 import { catalogoService } from "./catalogo.service";
@@ -135,6 +136,7 @@ export const usuarioService = {
     username: string,
     currentUserId?: string,
   ): Promise<{ disponible: boolean }> {
+    if (isReservedUsername(username)) return { disponible: false };
     const taken = await userRepository.isUsernameTaken(username, currentUserId);
     return { disponible: !taken };
   },

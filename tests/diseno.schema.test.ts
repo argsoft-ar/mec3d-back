@@ -74,6 +74,70 @@ describe("createProductSchema", () => {
   });
 });
 
+describe("createProductSchema - planos técnicos", () => {
+  const plano = {
+    titulo: "Plano de engranaje",
+    archivoUrl: "https://cdn.test.example/mec3d/modelos/a.pdf",
+    precioBase: 500,
+    categoria: "Planos técnicos",
+    formato: "PDF",
+  };
+
+  it("acepta un plano sin tecnologia, materiales ni especificaciones", () => {
+    expect(parse(plano).success).toBe(true);
+  });
+
+  it.each(["PDF", "DWG", "DXF"])("acepta formato %s", (formato) => {
+    const archivoUrl = `https://cdn.test.example/mec3d/modelos/a.${formato.toLowerCase()}`;
+    expect(parse({ ...plano, formato, archivoUrl }).success).toBe(true);
+  });
+
+  it.each([
+    ["sin formato", { formato: undefined }],
+    ["formato STL", { formato: "STL" }],
+    ["formato en minúsculas", { formato: "pdf" }],
+    ["materiales sin tecnologia", { materiales: ["PLA"] }],
+  ])("rechaza plano %s", (_name, override) => {
+    expect(parse({ ...plano, ...override }).success).toBe(false);
+  });
+
+  it("sigue exigiendo tecnologia y materiales en otras categorías", () => {
+    const { tecnologia, materiales, ...sinCatalogo } = validBody;
+    expect(parse({ ...sinCatalogo, categoria: "Autos" }).success).toBe(false);
+    expect(parse({ ...validBody, categoria: "Autos" }).success).toBe(true);
+  });
+
+  it.each([
+    [
+      "extensión que no es de plano",
+      { archivoUrl: "https://cdn.test.example/mec3d/modelos/a.stl" },
+    ],
+    ["extensión distinta del formato", { formato: "DWG" }],
+    [
+      "sin extensión",
+      { archivoUrl: "https://cdn.test.example/mec3d/modelos/a" },
+    ],
+  ])("rechaza plano con %s", (_name, override) => {
+    expect(parse({ ...plano, ...override }).success).toBe(false);
+  });
+
+  it("deriva la extensión ignorando query string y mayúsculas", () => {
+    const archivoUrl = "https://cdn.test.example/mec3d/modelos/a.PDF?x=1.stl";
+    expect(parse({ ...plano, archivoUrl }).success).toBe(true);
+  });
+
+  it.each(["pdf", "dwg", "dxf"])(
+    "rechaza un archivo .%s fuera de la categoría Planos técnicos",
+    (ext) => {
+      const archivoUrl = `https://cdn.test.example/mec3d/modelos/a.${ext}`;
+      expect(parse({ ...validBody, archivoUrl }).success).toBe(false);
+      expect(
+        parse({ ...validBody, archivoUrl, categoria: "Autos" }).success,
+      ).toBe(false);
+    },
+  );
+});
+
 describe("partialUpdateProductSchema", () => {
   it("permite omitir tecnologia y materiales", () => {
     const result = partialUpdateProductSchema.safeParse({

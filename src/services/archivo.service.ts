@@ -20,7 +20,12 @@ export interface ArchivoFirmado {
 export const archivoService = {
   // Archivos de R2: presigned GET de 5 min. Otros: solo si el host está en la allowlist
   // (archivos legacy); si no, se niega en vez de redirigir a un destino arbitrario.
-  async firmarUrl(archivoUrl: string): Promise<ArchivoFirmado> {
+  // `adjunto` fuerza Content-Disposition: attachment (descarga del comprador) para que
+  // el navegador nunca renderice el archivo inline.
+  async firmarUrl(
+    archivoUrl: string,
+    opts: { adjunto?: boolean } = {},
+  ): Promise<ArchivoFirmado> {
     const key = extractR2Key(archivoUrl);
     if (key) {
       if (!envConfig.r2.bucketName) {
@@ -32,7 +37,11 @@ export const archivoService = {
       try {
         const url = await getSignedUrl(
           r2Client,
-          new GetObjectCommand({ Bucket: envConfig.r2.bucketName, Key: key }),
+          new GetObjectCommand({
+            Bucket: envConfig.r2.bucketName,
+            Key: key,
+            ...(opts.adjunto && { ResponseContentDisposition: "attachment" }),
+          }),
           { expiresIn: ARCHIVO_URL_TTL_SECONDS },
         );
         return { url, expiresIn: ARCHIVO_URL_TTL_SECONDS };

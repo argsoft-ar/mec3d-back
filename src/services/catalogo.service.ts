@@ -1,5 +1,6 @@
 import {
   catalogoRepository,
+  CategoriaCatalogoRow,
   MaterialCatalogoRow,
   TecnologiaCatalogoRow,
 } from "../repositories/catalogo.repository";
@@ -63,10 +64,11 @@ export const catalogoService = {
     return tecnologia;
   },
 
-  // Devuelve el id de la categoría existente; 400 si no existe (no se crean categorías).
-  async resolverCategoriaId(
+  // Devuelve la categoría existente (nombre canónico del catálogo); 400 si no existe (no se
+  // crean categorías). Sin nombre devuelve null.
+  async resolverCategoria(
     nombre: string | null | undefined,
-  ): Promise<number | null> {
+  ): Promise<CategoriaCatalogoRow | null> {
     if (!nombre) return null;
     const categoria = await catalogoRepository.findCategoriaByNombre(
       nombre.trim(),
@@ -76,7 +78,13 @@ export const catalogoService = {
         `Categoría inexistente en el catálogo: ${nombre}`,
       );
     }
-    return categoria.id;
+    return categoria;
+  },
+
+  async resolverCategoriaId(
+    nombre: string | null | undefined,
+  ): Promise<number | null> {
+    return (await this.resolverCategoria(nombre))?.id ?? null;
   },
 
   async getMaterialesDeDiseno(

@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { paginationSchema } from "./pagination.schema";
 import { zonaIdQuerySchema } from "./common.schema";
+import {
+  esCategoriaPlano,
+  esFormatoPlano,
+  MSG_FORMATO_PLANO,
+  validarArchivoSegunCategoria,
+} from "../utils/plano.util";
 
 export type AssetKind = "archivo" | "imagen";
 
@@ -169,7 +175,9 @@ const materialesSchema = z
     "Los materiales no pueden repetirse",
   );
 
-const productBodySchema = z.object({
+// tecnologia / materiales son opcionales a nivel de campo: su obligatoriedad depende de la
+// categoría y se exige en validarSegunCategoria (create/PUT) o en el service (PATCH).
+const productFieldsSchema = z.object({
   titulo: z
     .string()
     .min(3, "El título debe tener al menos 3 caracteres")
@@ -195,16 +203,74 @@ const productBodySchema = z.object({
     .min(1)
     .max(100, "La categoría no puede superar 100 caracteres")
     .optional(),
-  tecnologia: nombreCatalogoSchema,
-  materiales: materialesSchema,
+  tecnologia: nombreCatalogoSchema.optional(),
+  materiales: materialesSchema.optional(),
 });
+
+function validarSegunCategoria(
+  body: z.infer<typeof productFieldsSchema>,
+  ctx: z.RefinementCtx,
+): void {
+  const esPlano = esCategoriaPlano(body.categoria);
+  // Con formato de plano inválido ya se reporta ese error; no se duplica con el del archivo.
+  const mensajeArchivo =
+    esPlano && !esFormatoPlano(body.formato)
+      ? null
+      : validarArchivoSegunCategoria(body.archivoUrl, body.formato, esPlano);
+  if (mensajeArchivo) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: mensajeArchivo,
+      path: ["archivoUrl"],
+    });
+  }
+
+  if (esPlano) {
+    if (!esFormatoPlano(body.formato)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: MSG_FORMATO_PLANO,
+        path: ["formato"],
+      });
+    }
+    // Los materiales se validan contra la tecnología del diseño: sin ella no tienen sentido.
+    if (body.materiales && !body.tecnologia) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Los materiales requieren indicar la tecnología",
+        path: ["tecnologia"],
+      });
+    }
+    return;
+  }
+  if (!body.tecnologia) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "La tecnología es obligatoria",
+      path: ["tecnologia"],
+    });
+  }
+  if (!body.materiales) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Debe indicar al menos un material",
+      path: ["materiales"],
+    });
+  }
+}
+
+const productBodySchema = productFieldsSchema.superRefine(
+  validarSegunCategoria,
+);
 
 export const createProductSchema = z.object({ body: productBodySchema });
 
 export const updateProductSchema = z.object({ body: productBodySchema });
 
+// PATCH: la categoría puede no venir, así que las reglas por categoría se validan en
+// productService.partialUpdate contra el estado resultante del diseño.
 export const partialUpdateProductSchema = z.object({
-  body: productBodySchema.partial(),
+  body: productFieldsSchema.partial(),
 });
 
 // Listado de productos: paginación + zonaId opcional (código INDEC) para ordenar por cercanía
