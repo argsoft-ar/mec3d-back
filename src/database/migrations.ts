@@ -72,12 +72,36 @@ export const CATEGORIAS_NOMBRE_LOWER_INDEX_SQL = `
   CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_nombre_lower ON categorias (lower(nombre));
 `;
 
+// Formato de disenos.preview_url (key en R2 generada por el backend); espejo de PREVIEW_KEY_REGEX.
+export const PREVIEW_URL_CHECK_SQL = `preview_url IS NULL OR preview_url ~ '^previews/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.stl$'`;
+
+// preview_url es un derivado regenerable (previews:backfill): las filas que no cumplen el
+// formato se anulan antes de validar, as\u00ed la migraci\u00f3n no falla con datos existentes.
+const PREVIEW_URL_CHECK_MIGRATION_SQL = `
+  DO $mig$
+  BEGIN
+    UPDATE disenos SET preview_url = NULL
+      WHERE NOT (${PREVIEW_URL_CHECK_SQL});
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'chk_diseno_preview_key' AND conrelid = 'disenos'::regclass
+    ) THEN
+      ALTER TABLE disenos ADD CONSTRAINT chk_diseno_preview_key
+        CHECK (${PREVIEW_URL_CHECK_SQL}) NOT VALID;
+    END IF;
+    ALTER TABLE disenos VALIDATE CONSTRAINT chk_diseno_preview_key;
+  END
+  $mig$;
+`;
+
 // 1 = esquema con ledger de pagos y código de entrega HMAC (anterior al versionado).
 // 2 = hardening: uploads, disputas, retención de payouts, cooldown de cuenta, reintentos de
 //     webhook, invariantes del ledger. Todas las sentencias son idempotentes.
 // 3 = unicidad case-insensitive de username.
 // 4 = planos técnicos: disenos.tecnologia_id nullable y categoría 'Planos técnicos'.
 // 5 = unicidad case-insensitive del nombre de categoría (el catálogo se resuelve con lower()).
+// 6 = disenos.preview_url: key en R2 del preview 3D degradado (público, vía URL firmada).
+// 7 = CHECK estricto de formato sobre disenos.preview_url (previews/<uuid>.stl).
 export const MIGRATIONS: Migration[] = [
   { version: 1, nombre: "esquema_base", sql: "" },
   {
@@ -205,6 +229,16 @@ export const MIGRATIONS: Migration[] = [
     version: 5,
     nombre: "categorias_nombre_unico_lower",
     sql: CATEGORIAS_NOMBRE_LOWER_INDEX_SQL,
+  },
+  {
+    version: 6,
+    nombre: "diseno_preview_url",
+    sql: `ALTER TABLE disenos ADD COLUMN IF NOT EXISTS preview_url TEXT NULL;`,
+  },
+  {
+    version: 7,
+    nombre: "diseno_preview_url_check",
+    sql: PREVIEW_URL_CHECK_MIGRATION_SQL,
   },
 ];
 

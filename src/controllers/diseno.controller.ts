@@ -180,3 +180,18 @@ export const getArchivoPreview = async (
     next(error);
   }
 };
+
+export const getPreviewPublico = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const preview = await productService.getPreviewPublico(req.params.id);
+    // La URL firmada es de vida corta: no debe quedar en caches intermedios.
+    res.set("Cache-Control", "no-store");
+    res.status(200).json(preview);
+  } catch (error) {
+    next(error);
+  }
+};

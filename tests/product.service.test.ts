@@ -11,6 +11,8 @@ jest.mock("../src/repositories/diseno.repository", () => ({
     updateProduct: jest.fn(),
     partialUpdateProduct: jest.fn(),
     getByIdWithDesigner: jest.fn(),
+    deleteProduct: jest.fn(),
+    clearPreviewUrl: jest.fn().mockResolvedValue(undefined),
   },
 }));
 jest.mock("../src/repositories/compra.repository", () => ({
@@ -31,8 +33,15 @@ jest.mock("../src/services/catalogo.service", () => ({
   },
 }));
 jest.mock("../src/services/archivo.service", () => ({ archivoService: {} }));
+jest.mock("../src/services/preview.service", () => ({
+  previewService: {
+    programar: jest.fn().mockResolvedValue(undefined),
+    descartar: jest.fn().mockResolvedValue(undefined),
+  },
+}));
 
 import { productService } from "../src/services/product.service";
+import { previewService } from "../src/services/preview.service";
 import { disenoRepository } from "../src/repositories/diseno.repository";
 import { compraRepository } from "../src/repositories/compra.repository";
 import { ordenFabricacionRepository } from "../src/repositories/orden-fabricacion.repository";
@@ -84,7 +93,10 @@ beforeEach(() => {
   compras.existeFabricacionEnCurso.mockResolvedValue(false);
   ordenes.existeActivaPorDiseno.mockResolvedValue(false);
   catalogo.resolverCategoria.mockResolvedValue(AUTOS);
-  catalogo.resolverTecnologia.mockResolvedValue({ id: 1, nombre: "Impresión 3D" });
+  catalogo.resolverTecnologia.mockResolvedValue({
+    id: 1,
+    nombre: "Impresión 3D",
+  });
   catalogo.resolverMateriales.mockResolvedValue([
     { id: 1, nombre: "PLA", tecnologia_id: 1 },
   ]);
@@ -96,7 +108,10 @@ beforeEach(() => {
 describe("productService: coherencia archivoUrl / categoría / formato", () => {
   it("create rechaza un .pdf en una categoría que no es plano", async () => {
     await expect(
-      productService.create({ ...dtoModelo, archivoUrl: `${base}/a.pdf` }, USER),
+      productService.create(
+        { ...dtoModelo, archivoUrl: `${base}/a.pdf` },
+        USER,
+      ),
     ).rejects.toMatchObject({ statusCode: 400 });
     expect(diseno.createProduct).not.toHaveBeenCalled();
   });
@@ -165,7 +180,11 @@ describe("productService: coherencia archivoUrl / categoría / formato", () => {
 });
 
 describe("productService: cambio a Planos técnicos con fabricación en curso", () => {
-  const aPlano = { categoria: "Planos técnicos", formato: "PDF", archivoUrl: `${base}/p.pdf` };
+  const aPlano = {
+    categoria: "Planos técnicos",
+    formato: "PDF",
+    archivoUrl: `${base}/p.pdf`,
+  };
 
   beforeEach(() => {
     catalogo.resolverCategoria.mockResolvedValue(PLANOS);
@@ -193,7 +212,10 @@ describe("productService: cambio a Planos técnicos con fabricación en curso", 
     expect(diseno.lockById.mock.invocationCallOrder[0]).toBeLessThan(
       diseno.partialUpdateProduct.mock.invocationCallOrder[0],
     );
-    expect(compras.existeFabricacionEnCurso).toHaveBeenCalledWith(ID, mockClient);
+    expect(compras.existeFabricacionEnCurso).toHaveBeenCalledWith(
+      ID,
+      mockClient,
+    );
     expect(diseno.partialUpdateProduct).toHaveBeenCalledWith(
       ID,
       USER,
@@ -238,5 +260,213 @@ describe("productService: cambio a Planos técnicos con fabricación en curso", 
     catalogo.resolverCategoria.mockResolvedValue(AUTOS);
     await productService.partialUpdate(ID, { categoria: "Autos" }, USER);
     expect(diseno.lockById).not.toHaveBeenCalled();
+  });
+});
+
+describe("productService: generación del preview 3D", () => {
+  const preview = previewService as jest.Mocked<typeof previewService>;
+
+  it("create programa el preview de un modelo 3D sin esperarlo", async () => {
+    await productService.create(dtoModelo, USER);
+    expect(preview.programar).toHaveBeenCalledWith(
+      ID,
+      dtoModelo.archivoUrl,
+      USER,
+    );
+  });
+
+  it("create no programa preview para planos técnicos", async () => {
+    catalogo.resolverCategoria.mockResolvedValue(PLANOS);
+    await productService.create(
+      {
+        titulo: "Plano",
+        archivoUrl: `${base}/a.pdf`,
+        precioBase: 100,
+        formato: "PDF",
+        categoria: "Planos técnicos",
+      },
+      USER,
+    );
+    expect(preview.programar).not.toHaveBeenCalled();
+  });
+
+  it("update con archivo nuevo descarta el preview viejo (leído en la transacción) y regenera", async () => {
+    diseno.getById.mockResolvedValue({
+      ...existenteModelo,
+      preview_url: "previews/leido-antes.stl",
+    });
+    diseno.updateProduct.mockResolvedValue({
+      id: ID,
+      preview_url_anterior: "previews/viejo.stl",
+    });
+    const nuevo = `${base}/b.stl`;
+    await productService.update(ID, { ...dtoModelo, archivoUrl: nuevo }, USER);
+    expect(preview.descartar).toHaveBeenCalledWith("previews/viejo.stl");
+    expect(preview.descartar).not.toHaveBeenCalledWith(
+      "previews/leido-antes.stl",
+    );
+    expect(preview.programar).toHaveBeenCalledWith(ID, nuevo, USER);
+  });
+
+  it("update con el mismo archivo y preview existente no regenera", async () => {
+    diseno.getById.mockResolvedValue({
+      ...existenteModelo,
+      preview_url: "previews/ok.stl",
+    });
+    await productService.update(ID, dtoModelo, USER);
+    expect(preview.descartar).not.toHaveBeenCalled();
+    expect(preview.programar).not.toHaveBeenCalled();
+  });
+
+  it("update con el mismo archivo y preview_url NULL NO reencola (evita amplificación; lo recupera el backfill)", async () => {
+    diseno.getById.mockResolvedValue({ ...existenteModelo, preview_url: null });
+    await productService.update(ID, dtoModelo, USER);
+    await productService.update(ID, dtoModelo, USER);
+    expect(preview.programar).not.toHaveBeenCalled();
+  });
+
+  it("partialUpdate con preview_url NULL que no toca el archivo no reencola", async () => {
+    diseno.getById.mockResolvedValue({ ...existenteModelo, preview_url: null });
+    await productService.partialUpdate(ID, { titulo: "Otro" }, USER);
+    await productService.partialUpdate(
+      ID,
+      { archivoUrl: existenteModelo.archivo_url },
+      USER,
+    );
+    expect(preview.programar).not.toHaveBeenCalled();
+  });
+
+  it("partialUpdate que no toca el archivo no regenera si ya hay preview", async () => {
+    diseno.getById.mockResolvedValue({
+      ...existenteModelo,
+      preview_url: "previews/ok.stl",
+    });
+    await productService.partialUpdate(ID, { titulo: "Otro" }, USER);
+    expect(preview.programar).not.toHaveBeenCalled();
+  });
+
+  it("partialUpdate con archivo nuevo regenera", async () => {
+    const nuevo = `${base}/c.stl`;
+    await productService.partialUpdate(ID, { archivoUrl: nuevo }, USER);
+    expect(preview.programar).toHaveBeenCalledWith(ID, nuevo, USER);
+  });
+
+  describe("borrado del preview", () => {
+    const KEY = "previews/9f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f.stl";
+    const conPreview = { ...existenteModelo, preview_url: KEY };
+    const flush = () => new Promise((r) => setImmediate(r));
+
+    it("al eliminar el diseño limpia y borra el preview devuelto por el RETURNING del soft-delete", async () => {
+      // El valor leído antes (getById) puede estar desactualizado: manda el RETURNING.
+      diseno.getById.mockResolvedValue({
+        ...existenteModelo,
+        preview_url: "previews/leido-antes.stl",
+      });
+      diseno.deleteProduct.mockResolvedValue({ id: ID, preview_url: KEY });
+      await productService.delete(ID, USER);
+      await flush();
+      expect(diseno.clearPreviewUrl).toHaveBeenCalledWith(ID, KEY);
+      expect(preview.descartar).toHaveBeenCalledWith(KEY);
+      expect(preview.descartar).not.toHaveBeenCalledWith(
+        "previews/leido-antes.stl",
+      );
+    });
+
+    it("eliminar un diseño sin preview no toca R2", async () => {
+      diseno.getById.mockResolvedValue({
+        ...existenteModelo,
+        preview_url: null,
+      });
+      diseno.deleteProduct.mockResolvedValue({ id: ID, preview_url: null });
+      await productService.delete(ID, USER);
+      await flush();
+      expect(diseno.clearPreviewUrl).not.toHaveBeenCalled();
+      expect(preview.descartar).not.toHaveBeenCalled();
+    });
+
+    it("si falla la limpieza, la eliminación igual termina bien", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      diseno.getById.mockResolvedValue(conPreview);
+      diseno.deleteProduct.mockResolvedValue({ id: ID, preview_url: KEY });
+      diseno.clearPreviewUrl.mockRejectedValueOnce(new Error("db caída"));
+      await expect(productService.delete(ID, USER)).resolves.toBeUndefined();
+      await flush();
+      expect(errorSpy).toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it("partialUpdate que pasa a plano descarta el preview y no encola otro", async () => {
+      catalogo.resolverCategoria.mockResolvedValue(PLANOS);
+      diseno.getById.mockResolvedValue(conPreview);
+      diseno.partialUpdateProduct.mockResolvedValue({
+        id: ID,
+        preview_url_anterior: KEY,
+      });
+      await productService.partialUpdate(
+        ID,
+        {
+          categoria: "Planos técnicos",
+          formato: "PDF",
+          archivoUrl: `${base}/p.pdf`,
+        },
+        USER,
+      );
+      await flush();
+      expect(diseno.clearPreviewUrl).toHaveBeenCalledWith(ID, KEY);
+      expect(preview.descartar).toHaveBeenCalledWith(KEY);
+      expect(preview.programar).not.toHaveBeenCalled();
+    });
+
+    it("update (PUT) que pasa a plano descarta el preview y no encola otro", async () => {
+      catalogo.resolverCategoria.mockResolvedValue(PLANOS);
+      diseno.getById.mockResolvedValue(conPreview);
+      diseno.updateProduct.mockResolvedValue({
+        id: ID,
+        preview_url_anterior: KEY,
+      });
+      await productService.update(
+        ID,
+        {
+          titulo: "Plano",
+          archivoUrl: `${base}/p.pdf`,
+          precioBase: 100,
+          formato: "PDF",
+          categoria: "Planos técnicos",
+        },
+        USER,
+      );
+      await flush();
+      expect(diseno.clearPreviewUrl).toHaveBeenCalledWith(ID, KEY);
+      expect(preview.descartar).toHaveBeenCalledWith(KEY);
+      expect(preview.programar).not.toHaveBeenCalled();
+    });
+
+    it("si falla la limpieza al pasar a plano, la actualización igual termina bien", async () => {
+      const errorSpy = jest
+        .spyOn(console, "error")
+        .mockImplementation(() => undefined);
+      catalogo.resolverCategoria.mockResolvedValue(PLANOS);
+      diseno.getById.mockResolvedValue(conPreview);
+      diseno.partialUpdateProduct.mockResolvedValue({
+        id: ID,
+        preview_url_anterior: KEY,
+      });
+      diseno.clearPreviewUrl.mockRejectedValueOnce(new Error("db caída"));
+      await expect(
+        productService.partialUpdate(
+          ID,
+          {
+            categoria: "Planos técnicos",
+            formato: "PDF",
+            archivoUrl: `${base}/p.pdf`,
+          },
+          USER,
+        ),
+      ).resolves.toBeDefined();
+      await flush();
+      errorSpy.mockRestore();
+    });
   });
 });
