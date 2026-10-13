@@ -61,6 +61,22 @@ function enTransaccion<T>(
   return db ? fn(db) : withTransaction(fn);
 }
 
+// Bloquea la fila (FOR UPDATE) y lee su preview_url dentro de la transacci\u00f3n de escritura: la clave
+// vieja a descartar es la vigente al escribir, no una le\u00edda antes (evita objetos hu\u00e9rfanos).
+async function bloquearPreviewActual(
+  client: Db,
+  id: string,
+  disenadorId: string,
+): Promise<{ preview_url: string | null } | undefined> {
+  const result = await client.query(
+    `SELECT preview_url FROM disenos
+     WHERE id = $1 AND disenador_id = $2 AND eliminado_en IS NULL
+     FOR UPDATE;`,
+    [id, disenadorId],
+  );
+  return result.rows[0];
+}
+
 async function replaceMateriales(
   client: Db,
   disenoId: string,
@@ -245,9 +261,13 @@ export const disenoRepository = {
     db?: Db,
   ) {
     return enTransaccion(db, async (client) => {
+      const anterior = await bloquearPreviewActual(client, id, disenadorId);
+      if (!anterior) return undefined;
       const query = `
         UPDATE disenos
-        SET titulo = $1, descripcion = $2, imagen_url = $3, archivo_url = $4,
+        SET titulo = $1, descripcion = $2, imagen_url = $3,
+            preview_url = CASE WHEN archivo_url IS DISTINCT FROM $4 THEN NULL ELSE preview_url END,
+            archivo_url = $4,
             precio_base = $5, formato = $6, especificaciones = $7, categoria_id = $8,
             tecnologia_id = $9
         WHERE id = $10 AND disenador_id = $11 AND eliminado_en IS NULL
@@ -270,8 +290,9 @@ export const disenoRepository = {
       ];
       const result = await client.query(query, values);
       const row = result.rows[0];
-      if (row) await replaceMateriales(client, id, productData.materialIds);
-      return row;
+      if (!row) return row;
+      await replaceMateriales(client, id, productData.materialIds);
+      return { ...row, preview_url_anterior: anterior.preview_url };
     });
   },
 
@@ -294,6 +315,12 @@ export const disenoRepository = {
 
         const dbCol = COLUMN_MAP[key] ?? key;
 
+        // Un archivo nuevo invalida el preview del anterior (el service lo regenera).
+        if (key === "archivoUrl") {
+          fields.push(
+            `preview_url = CASE WHEN archivo_url IS DISTINCT FROM $${queryIndex} THEN NULL ELSE preview_url END`,
+          );
+        }
         fields.push(`${dbCol} = $${queryIndex}`);
         values.push(key === "especificaciones" ? JSON.stringify(value) : value);
         queryIndex++;
@@ -302,7 +329,11 @@ export const disenoRepository = {
       if (fields.length === 0 && materialIds === undefined) return null;
 
       let row;
+      let previewAnterior: string | null = null;
       if (fields.length > 0) {
+        const anterior = await bloquearPreviewActual(client, id, disenadorId);
+        if (!anterior) return undefined;
+        previewAnterior = anterior.preview_url;
         values.push(id, disenadorId);
         const result = await client.query(
           `UPDATE disenos
@@ -321,22 +352,25 @@ export const disenoRepository = {
           [id, disenadorId],
         );
         row = result.rows[0];
+        previewAnterior = row?.preview_url ?? null;
       }
 
-      if (row && materialIds !== undefined) {
+      if (!row) return row;
+      if (materialIds !== undefined) {
         await replaceMateriales(client, id, materialIds);
       }
-      return row;
+      return { ...row, preview_url_anterior: previewAnterior };
     });
   },
 
+  // Soft-delete: una compra puede referenciar este diseño (FK compras.id_modelo),
+  // por lo que nunca se hace DELETE físico, solo se marca eliminado_en.
+  // Devuelve preview_url tal como estaba al borrar (la fila queda bloqueada por el UPDATE).
   async deleteProduct(id: string, disenadorId: string) {
-    // Soft-delete: una compra puede referenciar este diseño (FK compras.id_modelo),
-    // por lo que nunca se hace DELETE físico, solo se marca eliminado_en.
     const query = `
       UPDATE disenos SET eliminado_en = now()
       WHERE id = $1 AND disenador_id = $2 AND eliminado_en IS NULL
-      RETURNING id;
+      RETURNING id, preview_url;
     `;
     const result = await pool.query(query, [id, disenadorId]);
     return result.rows[0];
@@ -402,6 +436,89 @@ export const disenoRepository = {
       [id, userId],
     );
     return result.rows[0] ?? null;
+  },
+
+  // Único lector de preview_url para el endpoint público: nunca selecciona archivo_url.
+  async getPreviewPublico(
+    id: string,
+  ): Promise<{ preview_url: string | null; categoria_nombre: string | null } | null> {
+    const result = await pool.query(
+      `SELECT d.preview_url, c.nombre AS categoria_nombre
+       FROM disenos d
+       LEFT JOIN categorias c ON c.id = d.categoria_id
+       WHERE d.id = $1 AND d.eliminado_en IS NULL;`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  },
+
+  // Guarda el preview solo si el archivo sigue siendo el que se procesó y no hay preview (o, con
+  // `reemplazarDe`, si el preview vigente sigue siendo esa clave): con dos generaciones
+  // concurrentes gana la primera y la otra borra su objeto.
+  async setPreviewUrl(
+    id: string,
+    archivoUrl: string,
+    previewKey: string,
+    reemplazarDe?: string,
+  ): Promise<boolean> {
+    const result = reemplazarDe
+      ? await pool.query(
+          `UPDATE disenos SET preview_url = $3
+           WHERE id = $1 AND archivo_url = $2 AND preview_url = $4 AND eliminado_en IS NULL;`,
+          [id, archivoUrl, previewKey, reemplazarDe],
+        )
+      : await pool.query(
+          `UPDATE disenos SET preview_url = $3
+           WHERE id = $1 AND archivo_url = $2 AND preview_url IS NULL AND eliminado_en IS NULL;`,
+          [id, archivoUrl, previewKey],
+        );
+    return (result.rowCount ?? 0) > 0;
+  },
+
+  // Quita el preview solo si sigue siendo `previewKey` (no pisa uno regenerado en el medio).
+  async clearPreviewUrl(id: string, previewKey: string): Promise<void> {
+    await pool.query(
+      `UPDATE disenos SET preview_url = NULL WHERE id = $1 AND preview_url = $2;`,
+      [id, previewKey],
+    );
+  },
+
+  // Backfill: diseños activos sin preview, excluyendo planos técnicos; paginado por id.
+  async listarSinPreview(
+    despuesDeId: string,
+    limit: number,
+    categoriaPlano: string,
+  ): Promise<{ id: string; archivo_url: string }[]> {
+    const result = await pool.query(
+      `SELECT d.id, d.archivo_url
+       FROM disenos d
+       LEFT JOIN categorias c ON c.id = d.categoria_id
+       WHERE d.preview_url IS NULL AND d.eliminado_en IS NULL AND d.id > $1
+         AND (c.nombre IS NULL OR lower(c.nombre) <> lower($3))
+       ORDER BY d.id
+       LIMIT $2;`,
+      [despuesDeId, limit, categoriaPlano],
+    );
+    return result.rows;
+  },
+
+  // Backfill --force: todos los diseños activos (con o sin preview), sin planos técnicos; paginado por id.
+  async listarParaRegenerar(
+    despuesDeId: string,
+    limit: number,
+    categoriaPlano: string,
+  ): Promise<{ id: string; archivo_url: string; preview_url: string | null }[]> {
+    const result = await pool.query(
+      `SELECT d.id, d.archivo_url, d.preview_url
+       FROM disenos d
+       LEFT JOIN categorias c ON c.id = d.categoria_id
+       WHERE d.eliminado_en IS NULL AND d.id > $1
+         AND (c.nombre IS NULL OR lower(c.nombre) <> lower($3))
+       ORDER BY d.id
+       LIMIT $2;`,
+      [despuesDeId, limit, categoriaPlano],
+    );
+    return result.rows;
   },
 
   // Solo para el dueño ("mis diseños"): es el único listado que incluye archivo_url.

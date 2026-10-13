@@ -29,7 +29,55 @@ import {
   validarArchivoSegunCategoria,
 } from "../utils/plano.util";
 import { catalogoService } from "./catalogo.service";
-import { archivoService, ArchivoFirmado } from "./archivo.service";
+import {
+  archivoService,
+  ArchivoFirmado,
+  PreviewFirmado,
+} from "./archivo.service";
+import { previewService } from "./preview.service";
+
+// Dispara la generación del preview 3D en segundo plano; los planos técnicos no tienen preview.
+function programarPreview(
+  disenoId: string,
+  archivoUrl: string,
+  esPlano: boolean,
+  userId: string,
+): void {
+  if (!esPlano) void previewService.programar(disenoId, archivoUrl, userId);
+}
+
+// Best-effort: quita la key de la fila y borra el objeto; un fallo no rompe la operación del usuario.
+async function descartarPreview(
+  disenoId: string,
+  previewKey: string | null | undefined,
+): Promise<void> {
+  if (!previewKey) return;
+  try {
+    await disenoRepository.clearPreviewUrl(disenoId, previewKey);
+    await previewService.descartar(previewKey);
+  } catch (error) {
+    console.error(
+      `❌ No se pudo descartar el preview del diseño ${disenoId}: ${error instanceof Error ? error.name : "Error"}`,
+    );
+  }
+}
+
+// Efectos sobre el preview tras escribir: un archivo nuevo invalida el anterior y regenera (solo
+// acá, no por preview_url NULL: un fallo no se reintenta en cada PUT/PATCH; lo recupera el
+// backfill); pasar a plano lo descarta. `previewKeyAnterior` es la clave leída dentro de la
+// transacción de escritura (la que realmente quedó reemplazada).
+function actualizarPreviewTrasEscritura(
+  disenoId: string,
+  previewKeyAnterior: string | null | undefined,
+  archivoUrl: string,
+  cambioArchivo: boolean,
+  esPlano: boolean,
+  userId: string,
+): void {
+  if (cambioArchivo || esPlano)
+    void descartarPreview(disenoId, previewKeyAnterior);
+  if (cambioArchivo) programarPreview(disenoId, archivoUrl, esPlano, userId);
+}
 
 // La extensión de archivoUrl debe ser coherente con la categoría canónica y, en planos, con `formato`.
 function assertArchivoCoherente(
@@ -235,6 +283,15 @@ export const productService = {
     return archivoService.firmarUrl(acceso.archivo_url);
   },
 
+  // Preview degradado, público: solo toca preview_url (nunca archivo_url).
+  async getPreviewPublico(id: string): Promise<PreviewFirmado> {
+    const fila = await disenoRepository.getPreviewPublico(id);
+    if (!fila?.preview_url || esCategoriaPlano(fila.categoria_nombre)) {
+      throw new NotFoundError("Vista previa no disponible");
+    }
+    return archivoService.firmarPreview(fila.preview_url);
+  },
+
   async getByDesigner(designerId: string): Promise<Product[]> {
     const rows = await disenoRepository.getByDesigner(designerId);
     return rows.map(mapRowToProduct);
@@ -268,6 +325,7 @@ export const productService = {
       tecnologiaId,
       materialIds,
     });
+    programarPreview(newProduct.id, data.archivoUrl, esPlano, userId);
 
     // Obtener el producto con datos del diseñador
     const product = await this.getById(newProduct.id, { incluirArchivo: true });
@@ -333,6 +391,15 @@ export const productService = {
     if (!updated) {
       throw new NotFoundError("Producto no encontrado");
     }
+    const cambioArchivo = data.archivoUrl !== existing.archivo_url;
+    actualizarPreviewTrasEscritura(
+      id,
+      updated.preview_url_anterior,
+      data.archivoUrl,
+      cambioArchivo,
+      esPlano,
+      userId,
+    );
 
     const product = await this.getById(id, { incluirArchivo: true });
     return product!;
@@ -447,6 +514,16 @@ export const productService = {
     if (!updated) {
       throw new NotFoundError("Producto no encontrado o sin cambios válidos");
     }
+    const cambioArchivo =
+      data.archivoUrl !== undefined && data.archivoUrl !== existing.archivo_url;
+    actualizarPreviewTrasEscritura(
+      id,
+      updated.preview_url_anterior,
+      data.archivoUrl ?? existing.archivo_url,
+      cambioArchivo,
+      esPlano,
+      userId,
+    );
 
     const product = await this.getById(id, { incluirArchivo: true });
     return product!;
@@ -468,5 +545,6 @@ export const productService = {
     if (!deleted) {
       throw new NotFoundError("Producto no encontrado");
     }
+    void descartarPreview(id, deleted.preview_url);
   },
 };

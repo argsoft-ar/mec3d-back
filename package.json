@@ -17,7 +17,9 @@
     "db:truncate": "ts-node src/database/truncate.ts",
     "db:reset": "npm run db:init -- --force && npm run db:migrate && npm run db:seed -- --force",
     "seed": "ts-node src/database/seed.ts",
-    "r2:cors": "ts-node src/scripts/set-r2-cors.ts"
+    "r2:cors": "ts-node src/scripts/set-r2-cors.ts",
+    "previews:backfill": "ts-node src/scripts/backfill-previews.ts",
+    "previews:regenerate": "ts-node src/scripts/backfill-previews.ts --force"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -28,6 +30,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.6.1",
+    "fflate": "^0.8.3",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.3",
     "mercadopago": "^3.2.1",

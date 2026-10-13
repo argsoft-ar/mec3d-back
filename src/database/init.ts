@@ -4,6 +4,7 @@ import { guardOrExit } from "./guard";
 import {
   CATEGORIAS_NOMBRE_LOWER_INDEX_SQL,
   LEDGER_TRIGGER_SQL,
+  PREVIEW_URL_CHECK_SQL,
   SCHEMA_MIGRATIONS_DDL,
   SCHEMA_VERSIONS_SQL,
 } from "./migrations";
@@ -137,6 +138,8 @@ export const SCHEMA_SQL = `
     descripcion TEXT,
     categoria_id INTEGER,
     archivo_url TEXT NOT NULL,
+    -- Key en R2 (previews/<uuid>.stl) del preview degradado; NULL hasta generarse. Solo lo lee el endpoint público.
+    preview_url TEXT NULL,
     imagen_url TEXT,
     precio_base DECIMAL(10,2) NOT NULL,
     rating DECIMAL(3,2) DEFAULT 0.00,
@@ -151,7 +154,8 @@ export const SCHEMA_SQL = `
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_disenador FOREIGN KEY (disenador_id) REFERENCES usuarios(id) ON DELETE CASCADE,
     CONSTRAINT fk_categoria FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL,
-    CONSTRAINT fk_diseno_tecnologia FOREIGN KEY (tecnologia_id) REFERENCES tecnologias(id)
+    CONSTRAINT fk_diseno_tecnologia FOREIGN KEY (tecnologia_id) REFERENCES tecnologias(id),
+    CONSTRAINT chk_diseno_preview_key CHECK (${PREVIEW_URL_CHECK_SQL})
   );
   CREATE INDEX idx_disenos_disenador ON disenos (disenador_id);
   CREATE INDEX idx_disenos_categoria ON disenos (categoria_id);

@@ -48,6 +48,25 @@ export const usernameCheckLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Endpoint público del preview 3D: cada visita firma una URL de R2; se limita por IP.
+export const previewPublicoLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 60,
+  message: { error: "Demasiadas solicitudes de vista previa, intente más tarde" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Crear/editar un diseño escribe en DB y puede encolar la generación del preview 3D (CPU/R2): por usuario.
+export const productoEscrituraLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 60,
+  message: { error: "Demasiados cambios en diseños, intente más tarde" },
+  standardHeaders: true,
+  keyGenerator: userKeyGenerator,
+  legacyHeaders: false,
+});
+
 export const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 20,
