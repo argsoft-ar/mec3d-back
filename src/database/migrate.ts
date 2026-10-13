@@ -1,6 +1,10 @@
 import pool from "../config/db.config";
 import { SCHEMA_SQL, REFERENCE_DATA_SQL } from "./init";
-import { MIGRATIONS, SCHEMA_MIGRATIONS_DDL, USERNAME_LOWER_INDEX_SQL } from "./migrations";
+import {
+  MIGRATIONS,
+  SCHEMA_MIGRATIONS_DDL,
+  USERNAME_LOWER_INDEX_SQL,
+} from "./migrations";
 
 // Bootstrap no destructivo que corre el deploy, con versionado en schema_migrations:
 //   - DB vacía          -> crea el esquema completo (init.ts ya registra todas las versiones).

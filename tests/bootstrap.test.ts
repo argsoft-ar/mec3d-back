@@ -13,22 +13,32 @@ jest.mock("../src/config/db.config", () => ({
 describe("db:bootstrap - destino", () => {
   it("usa DB_NAME/DB_HOST/DB_PORT cuando no hay DATABASE_URL", () => {
     expect(
-      resolveDbTarget({ DB_HOST: "localhost", DB_PORT: "5433", DB_NAME: "mec3d_db" }),
+      resolveDbTarget({
+        DB_HOST: "localhost",
+        DB_PORT: "5433",
+        DB_NAME: "mec3d_db",
+      }),
     ).toEqual({ host: "localhost:5433", database: "mec3d_db" });
   });
 
   it("DATABASE_URL gana sobre DB_* y no expone credenciales", () => {
     const target = resolveDbTarget({
-      DATABASE_URL: "postgresql://user:s3cr3t@db.example.com:6543/otra_db?sslmode=require",
+      DATABASE_URL:
+        "postgresql://user:s3cr3t@db.example.com:6543/otra_db?sslmode=require",
       DB_NAME: "mec3d_db",
     });
-    expect(target).toEqual({ host: "db.example.com:6543", database: "otra_db" });
+    expect(target).toEqual({
+      host: "db.example.com:6543",
+      database: "otra_db",
+    });
     expect(JSON.stringify(target)).not.toContain("s3cr3t");
   });
 
   it("falla si no se puede determinar la base", () => {
     expect(() => resolveDbTarget({})).toThrow(/DB_NAME/);
-    expect(() => resolveDbTarget({ DATABASE_URL: "postgresql://u:p@h/" })).toThrow(/nombre de la base/);
+    expect(() =>
+      resolveDbTarget({ DATABASE_URL: "postgresql://u:p@h/" }),
+    ).toThrow(/nombre de la base/);
   });
 });
 
@@ -37,21 +47,32 @@ describe("db:bootstrap - --confirm-db", () => {
 
   it("exige el flag", () => {
     expect(() => assertConfirmDb(["--force"], target)).toThrow(/--confirm-db/);
-    expect(() => assertConfirmDb(["--confirm-db="], target)).toThrow(/--confirm-db/);
+    expect(() => assertConfirmDb(["--confirm-db="], target)).toThrow(
+      /--confirm-db/,
+    );
   });
 
   it("rechaza un nombre distinto al de la base destino", () => {
-    expect(() => assertConfirmDb(["--confirm-db=otra_db"], target)).toThrow(/no coincide/);
-    expect(() => assertConfirmDb(["--confirm-db=MEC3D_DB"], target)).toThrow(/no coincide/);
+    expect(() => assertConfirmDb(["--confirm-db=otra_db"], target)).toThrow(
+      /no coincide/,
+    );
+    expect(() => assertConfirmDb(["--confirm-db=MEC3D_DB"], target)).toThrow(
+      /no coincide/,
+    );
   });
 
   it("acepta el nombre exacto", () => {
-    expect(() => assertConfirmDb(["--force", "--confirm-db=mec3d_db"], target)).not.toThrow();
+    expect(() =>
+      assertConfirmDb(["--force", "--confirm-db=mec3d_db"], target),
+    ).not.toThrow();
   });
 });
 
 describe("db:bootstrap - credenciales del admin", () => {
-  const ok = { ADMIN_EMAIL: " Admin@Mec3d.local ", ADMIN_PASSWORD: "Clave1234" };
+  const ok = {
+    ADMIN_EMAIL: " Admin@Mec3d.local ",
+    ADMIN_PASSWORD: "Clave1234",
+  };
 
   it("normaliza el email y devuelve la contraseña tal cual", () => {
     expect(readAdminCredentials(ok)).toEqual({
@@ -61,14 +82,27 @@ describe("db:bootstrap - credenciales del admin", () => {
   });
 
   it("falla si faltan variables", () => {
-    expect(() => readAdminCredentials({})).toThrow(/ADMIN_EMAIL, ADMIN_PASSWORD/);
-    expect(() => readAdminCredentials({ ADMIN_EMAIL: "a@b.com" })).toThrow(/ADMIN_PASSWORD/);
-    expect(() => readAdminCredentials({ ADMIN_PASSWORD: "Clave1234" })).toThrow(/ADMIN_EMAIL/);
+    expect(() => readAdminCredentials({})).toThrow(
+      /ADMIN_EMAIL, ADMIN_PASSWORD/,
+    );
+    expect(() => readAdminCredentials({ ADMIN_EMAIL: "a@b.com" })).toThrow(
+      /ADMIN_PASSWORD/,
+    );
+    expect(() => readAdminCredentials({ ADMIN_PASSWORD: "Clave1234" })).toThrow(
+      /ADMIN_EMAIL/,
+    );
   });
 
   it("valida el email y la política de contraseña del registro sin filtrar el valor", () => {
-    expect(() => readAdminCredentials({ ...ok, ADMIN_EMAIL: "no-es-email" })).toThrow(/email/);
-    for (const password of ["corta1A", "sinnumeroA", "sinmayuscula1", "A1" + "x".repeat(71)]) {
+    expect(() =>
+      readAdminCredentials({ ...ok, ADMIN_EMAIL: "no-es-email" }),
+    ).toThrow(/email/);
+    for (const password of [
+      "corta1A",
+      "sinnumeroA",
+      "sinmayuscula1",
+      "A1" + "x".repeat(71),
+    ]) {
       let message = "";
       try {
         readAdminCredentials({ ...ok, ADMIN_PASSWORD: password });
@@ -85,10 +119,16 @@ describe("db:bootstrap - transacción", () => {
   const admin = { email: "admin@mec3d.local", passwordHash: "$2b$12$hash" };
 
   it("hace COMMIT y devuelve el id del admin", async () => {
-    const query = jest.fn().mockImplementation(async (sql: string) =>
-      sql.includes("INSERT INTO usuarios") ? { rows: [{ id: "uuid-1" }] } : { rows: [] },
+    const query = jest
+      .fn()
+      .mockImplementation(async (sql: string) =>
+        sql.includes("INSERT INTO usuarios")
+          ? { rows: [{ id: "uuid-1" }] }
+          : { rows: [] },
+      );
+    await expect(bootstrapDatabase({ query } as never, admin)).resolves.toBe(
+      "uuid-1",
     );
-    await expect(bootstrapDatabase({ query } as never, admin)).resolves.toBe("uuid-1");
     const sqls = query.mock.calls.map((c) => String(c[0]));
     expect(sqls[0]).toBe("SET statement_timeout = 0");
     expect(sqls[1]).toBe("BEGIN");
@@ -100,7 +140,9 @@ describe("db:bootstrap - transacción", () => {
       if (sql.includes("INSERT INTO usuarios")) throw new Error("boom");
       return { rows: [] };
     });
-    await expect(bootstrapDatabase({ query } as never, admin)).rejects.toThrow("boom");
+    await expect(bootstrapDatabase({ query } as never, admin)).rejects.toThrow(
+      "boom",
+    );
     const sqls = query.mock.calls.map((c) => String(c[0]));
     expect(sqls).toContain("ROLLBACK");
     expect(sqls).not.toContain("COMMIT");

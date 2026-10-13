@@ -32,8 +32,14 @@ function mapUniqueViolation(error: unknown): ConflictError | null {
 
 export const authService = {
   async register(data: RegisterRequest): Promise<RegisterResponse> {
-    const { email, username, password, rolPrincipal, zonaId, georefLocalidadId } =
-      data;
+    const {
+      email,
+      username,
+      password,
+      rolPrincipal,
+      zonaId,
+      georefLocalidadId,
+    } = data;
     const normalizedEmail = email.trim().toLowerCase();
 
     // Verificar si el usuario ya existe

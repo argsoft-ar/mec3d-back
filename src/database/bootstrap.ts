@@ -23,7 +23,9 @@ const CONFIRM_DB_FLAG = "--confirm-db=";
 
 // Destino efectivo, con la misma precedencia que db.config: DATABASE_URL gana sobre DB_*.
 // Nunca incluye credenciales.
-export function resolveDbTarget(env: NodeJS.ProcessEnv = process.env): DbTarget {
+export function resolveDbTarget(
+  env: NodeJS.ProcessEnv = process.env,
+): DbTarget {
   if (env.DATABASE_URL) {
     let url: URL;
     try {
@@ -32,12 +34,19 @@ export function resolveDbTarget(env: NodeJS.ProcessEnv = process.env): DbTarget 
       throw new Error("DATABASE_URL no es una URL válida");
     }
     const database = decodeURIComponent(url.pathname.replace(/^\//, ""));
-    if (!database) throw new Error("DATABASE_URL no indica el nombre de la base");
-    return { host: url.port ? `${url.hostname}:${url.port}` : url.hostname, database };
+    if (!database)
+      throw new Error("DATABASE_URL no indica el nombre de la base");
+    return {
+      host: url.port ? `${url.hostname}:${url.port}` : url.hostname,
+      database,
+    };
   }
 
   const database = env.DB_NAME?.trim();
-  if (!database) throw new Error("No se pudo determinar la base destino: falta DB_NAME o DATABASE_URL");
+  if (!database)
+    throw new Error(
+      "No se pudo determinar la base destino: falta DB_NAME o DATABASE_URL",
+    );
   const host = env.DB_HOST?.trim() || "localhost";
   return { host: `${host}:${env.DB_PORT?.trim() || "5432"}`, database };
 }
@@ -58,25 +67,39 @@ export function assertConfirmDb(argv: string[], target: DbTarget): void {
 }
 
 // Nunca incluye el valor de la contraseña en los mensajes de error.
-export function readAdminCredentials(env: NodeJS.ProcessEnv = process.env): AdminCredentials {
+export function readAdminCredentials(
+  env: NodeJS.ProcessEnv = process.env,
+): AdminCredentials {
   const rawEmail = env.ADMIN_EMAIL?.trim();
   const password = env.ADMIN_PASSWORD;
 
-  const missing = [!rawEmail && "ADMIN_EMAIL", !password && "ADMIN_PASSWORD"].filter(Boolean);
+  const missing = [
+    !rawEmail && "ADMIN_EMAIL",
+    !password && "ADMIN_PASSWORD",
+  ].filter(Boolean);
   if (missing.length > 0) {
-    throw new Error(`Faltan variables de entorno obligatorias: ${missing.join(", ")}`);
+    throw new Error(
+      `Faltan variables de entorno obligatorias: ${missing.join(", ")}`,
+    );
   }
 
   const email = emailSchema.safeParse(rawEmail);
   const pass = passwordSchema.safeParse(password);
   const problemas = [
-    ...(email.success ? [] : email.error.issues.map((i) => `ADMIN_EMAIL: ${i.message}`)),
-    ...(pass.success ? [] : pass.error.issues.map((i) => `ADMIN_PASSWORD: ${i.message}`)),
+    ...(email.success
+      ? []
+      : email.error.issues.map((i) => `ADMIN_EMAIL: ${i.message}`)),
+    ...(pass.success
+      ? []
+      : pass.error.issues.map((i) => `ADMIN_PASSWORD: ${i.message}`)),
   ];
   if (problemas.length > 0) throw new Error(problemas.join("; "));
 
   // Normalización idéntica a authService.register.
-  return { email: (rawEmail as string).toLowerCase(), password: password as string };
+  return {
+    email: (rawEmail as string).toLowerCase(),
+    password: password as string,
+  };
 }
 
 // Reset + esquema + datos de referencia + admin en una transacción: si algo falla,
@@ -115,16 +138,24 @@ const main = async () => {
     const credentials = readAdminCredentials();
     const passwordHash = await bcrypt.hash(credentials.password, SALT_ROUNDS);
 
-    console.log("🔄 Borrando la base y recreando esquema, datos de referencia y admin...");
+    console.log(
+      "🔄 Borrando la base y recreando esquema, datos de referencia y admin...",
+    );
     const client = await pool.connect();
     try {
-      await bootstrapDatabase(client, { email: credentials.email, passwordHash });
+      await bootstrapDatabase(client, {
+        email: credentials.email,
+        passwordHash,
+      });
     } finally {
       client.release();
     }
     console.log(`✅ Base inicializada. Admin creado: ${credentials.email}`);
   } catch (error) {
-    console.error("❌ Error en db:bootstrap:", error instanceof Error ? error.message : error);
+    console.error(
+      "❌ Error en db:bootstrap:",
+      error instanceof Error ? error.message : error,
+    );
     failed = true;
   } finally {
     await pool.end();
