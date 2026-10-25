@@ -405,7 +405,10 @@ export const disenoRepository = {
   // Único lector de preview_url para el endpoint público: nunca selecciona archivo_url.
   async getPreviewPublico(
     id: string,
-  ): Promise<{ preview_url: string | null; categoria_nombre: string | null } | null> {
+  ): Promise<{
+    preview_url: string | null;
+    categoria_nombre: string | null;
+  } | null> {
     const result = await pool.query(
       `SELECT d.preview_url, c.nombre AS categoria_nombre
        FROM disenos d
@@ -471,7 +474,9 @@ export const disenoRepository = {
     despuesDeId: string,
     limit: number,
     categoriaPlano: string,
-  ): Promise<{ id: string; archivo_url: string; preview_url: string | null }[]> {
+  ): Promise<
+    { id: string; archivo_url: string; preview_url: string | null }[]
+  > {
     const result = await pool.query(
       `SELECT d.id, d.archivo_url, d.preview_url
        FROM disenos d

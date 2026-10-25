@@ -52,7 +52,9 @@ export const usernameCheckLimiter = rateLimit({
 export const previewPublicoLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   max: 60,
-  message: { error: "Demasiadas solicitudes de vista previa, intente más tarde" },
+  message: {
+    error: "Demasiadas solicitudes de vista previa, intente más tarde",
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
