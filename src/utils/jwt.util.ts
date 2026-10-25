@@ -21,8 +21,10 @@ export const generateToken = (payload: TokenPayload): string => {
 
 export const verifyToken = (token: string): TokenPayload | null => {
   try {
-    return jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as TokenPayload;
-  } catch (error) {
+    return jwt.verify(token, JWT_SECRET, {
+      algorithms: ["HS256"],
+    }) as TokenPayload;
+  } catch {
     return null;
   }
 };

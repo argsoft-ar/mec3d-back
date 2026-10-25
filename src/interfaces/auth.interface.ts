@@ -19,6 +19,7 @@ export interface LoginResponse {
 
 export interface RegisterRequest {
   email: string;
+  username: string;
   password: string;
   rolPrincipal: RolUsuario;
   zonaId?: number;
@@ -30,6 +31,7 @@ export interface RegisterResponse {
   user: {
     id: string;
     email: string;
+    username: string;
     rolPrincipal: RolUsuario;
     zonaId: number | null;
     creadoEn: string;

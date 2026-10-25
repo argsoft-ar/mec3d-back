@@ -1,6 +1,7 @@
 import { PutBucketCorsCommand } from "@aws-sdk/client-s3";
 import r2Client from "../config/r2.config";
 import { envConfig } from "../config/env.config";
+import { validarOrigenesCorsProduccion } from "../utils/cors-origins.util";
 
 function stripTrailingSlashes(s: string): string {
   let result = s;
@@ -30,6 +31,8 @@ async function setR2Cors(): Promise<void> {
     );
   }
 
+  validarOrigenesCorsProduccion(allowedOrigins.filter(Boolean), envConfig.nodeEnv);
+
   const command = new PutBucketCorsCommand({
     Bucket: bucketName,
     CORSConfiguration: {
@@ -37,7 +40,7 @@ async function setR2Cors(): Promise<void> {
         {
           AllowedOrigins: allowedOrigins,
           AllowedMethods: ["GET", "HEAD"],
-          AllowedHeaders: ["*"],
+          // Un GET simple (sin headers custom) no dispara preflight: no se habilita ningún header.
           MaxAgeSeconds: 3600,
         },
       ],

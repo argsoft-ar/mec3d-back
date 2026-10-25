@@ -6,6 +6,8 @@ import { paginationSchemaDoc } from "./schemas/pagination.schema";
 import { authPaths } from "./auth.docs";
 import { productPaths } from "./product.docs";
 import { uploadPaths } from "./upload.docs";
+import { catalogoPaths } from "./catalogo.docs";
+import { pagoPaths, pagoSchemaDoc } from "./pago.docs";
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -38,12 +40,15 @@ const options: swaggerJsdoc.Options = {
         ...productSchemaDoc,
         ...errorSchemaDoc,
         ...paginationSchemaDoc,
+        ...pagoSchemaDoc,
       },
     },
     paths: {
       ...authPaths,
       ...productPaths,
       ...uploadPaths,
+      ...catalogoPaths,
+      ...pagoPaths,
     },
   },
   apis: [],

@@ -3,7 +3,7 @@
 # =============================================================================
 
 .PHONY: help install dev start build test db-up db-down db-stop db-logs db-status \
-        db-shell db-init db-seed db-migrate db-truncate db-reset db-fresh db-nuke \
+        db-shell db-init db-bootstrap db-seed db-migrate db-truncate db-reset db-fresh db-nuke \
         clean kill-port all restart full-reset test-watch test-ci
 
 help: ## Muestra esta ayuda
@@ -62,6 +62,9 @@ db-init: ## Inicializa el esquema de la base de datos
 
 db-seed: ## Carga datos de prueba
 	npm run db:seed
+
+db-bootstrap: ## DESTRUCTIVO: base en cero + referencia + 1 admin (ADMIN_EMAIL, ADMIN_PASSWORD, CONFIRM_DB=<nombre>)
+	npm run db:bootstrap -- --force --confirm-db=$(CONFIRM_DB)
 
 db-migrate: ## Ejecuta migraciones pendientes
 	npm run db:migrate
