@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { paginationSchema } from "./pagination.schema";
-import { zonaIdQuerySchema } from "./common.schema";
 import {
   esCategoriaPlano,
   esFormatoPlano,
@@ -273,11 +272,9 @@ export const partialUpdateProductSchema = z.object({
   body: productFieldsSchema.partial(),
 });
 
-// Listado de productos: paginación + zonaId opcional (código INDEC) para ordenar por cercanía
-// + categoria opcional (filtro por nombre del catálogo)
+// Listado de productos: paginación + categoria opcional (filtro por nombre del catálogo)
 export const listProductsSchema = z.object({
   query: paginationSchema.shape.query.extend({
     categoria: z.string().trim().min(1).max(100).optional(),
-    zonaId: zonaIdQuerySchema.optional(),
   }),
 });

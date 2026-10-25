@@ -76,7 +76,7 @@ export const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Tope de subidas simultáneas (cada una bufferiza hasta 30 MB en memoria), por usuario y
+// Tope de subidas simultáneas (cada una bufferiza hasta 10 MB en memoria), por usuario y
 // global. Va antes de multer para rechazar sin leer el cuerpo; el cupo se libera al terminar
 // la respuesta (finish) o cortarse la conexión (close/error). Contadores en memoria de la instancia.
 export function createUploadConcurrencyLimiter(

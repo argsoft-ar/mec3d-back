@@ -36,7 +36,7 @@ export function getDeliveryTimeoutDays(
   return dias === 0 ? DEFAULT_DELIVERY_TIMEOUT_DAYS : dias;
 }
 
-// Subidas simultáneas en curso (cada una bufferiza hasta 30 MB en memoria).
+// Subidas simultáneas en curso (cada una bufferiza hasta 10 MB en memoria).
 export const DEFAULT_UPLOAD_MAX_CONCURRENT_PER_USER = 2;
 export const DEFAULT_UPLOAD_MAX_CONCURRENT_GLOBAL = 10;
 
