@@ -79,10 +79,7 @@ export const resolverDisputaSchema = z.object({
   }),
   body: z.object({
     resolucion: z.enum(RESOLUCIONES_DISPUTA, {
-      errorMap: () => ({
-        message:
-          "resolucion debe ser liberar_fabricante o reembolsar_comprador",
-      }),
+      error: "resolucion debe ser liberar_fabricante o reembolsar_comprador",
     }),
     nota: z
       .string()

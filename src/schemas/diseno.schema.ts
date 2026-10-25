@@ -125,7 +125,7 @@ export const MAX_MATERIALES_POR_DISENO = 20;
 // Precio en pesos (precioBase y precios de negociación): finito, positivo, con tope y a lo
 // sumo 2 decimales para que el pasaje a centavos enteros sea exacto.
 export const precioPesosSchema = z
-  .number({ invalid_type_error: "El precio debe ser un número" })
+  .number({ error: "El precio debe ser un número" })
   .finite("El precio debe ser un número finito")
   .positive("El precio debe ser un número positivo")
   .max(MAX_PRECIO_BASE, `El precio máximo es ${MAX_PRECIO_BASE}`)
@@ -142,7 +142,7 @@ const specSchema = z.object({
   dificultad: z.enum(["Básico", "Intermedio", "Avanzado"]),
   tiempoImpresion: z
     .number({
-      invalid_type_error: "El tiempo de impresión debe ser un número de horas",
+      error: "El tiempo de impresión debe ser un número de horas",
     })
     .int("El tiempo de impresión debe ser un número entero de horas")
     .min(

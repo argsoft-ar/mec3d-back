@@ -7,7 +7,7 @@ export const crearCompraSchema = z.object({
       // descarga: se paga ahora (Checkout Pro). fabricacion: ancla de la solicitud; se
       // paga el precio negociado al cerrarse el trato.
       tipo: z.enum(["descarga", "fabricacion"], {
-        errorMap: () => ({ message: "tipo debe ser descarga o fabricacion" }),
+        error: "tipo debe ser descarga o fabricacion",
       }),
       // Nombre de uno de los materiales del diseño; solo aplica a fabricación.
       material: z.string().trim().min(1).max(100).optional(),

@@ -12,7 +12,12 @@ export const provinciaIdParamSchema = z.object({
 export const localidadesQuerySchema = z.object({
   query: z.object({
     provincia: z
-      .string({ required_error: "El parámetro provincia es requerido" })
+      .string({
+        error: (iss) =>
+          iss.input === undefined
+            ? "El parámetro provincia es requerido"
+            : undefined,
+      })
       .regex(/^\d{2}$/, "El parámetro provincia debe ser un código INDEC de 2 dígitos"),
     departamento: z
       .string()
