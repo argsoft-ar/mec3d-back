@@ -17,7 +17,7 @@ import {
 import { esExtensionPreview } from "../utils/mesh-preview.util";
 import { generarStlEnWorker } from "../utils/preview-worker.util";
 
-// Tope de descarga del original (el upload admite hasta 30 MB).
+// Tope de descarga del original (archivos previos al límite actual pueden pesar hasta 30 MB).
 export const PREVIEW_MAX_INPUT_BYTES = 35 * 1024 * 1024;
 const R2_TIMEOUT_MS = 30_000;
 // Generaciones en cola; al superarlo se descarta (el backfill las recupera).

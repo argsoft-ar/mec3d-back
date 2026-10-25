@@ -54,13 +54,13 @@ const MODEL_EXTENSIONS = new Set([".stl", ".3mf", ".obj", ".step", ".stp"]);
 // Planos técnicos: comparten el endpoint de modelos, pero con límite de tamaño propio. El
 // endpoint no conoce la categoría del diseño, así que el tipo se decide por extensión.
 export const PLANO_EXTENSIONS = new Set([".pdf", ".dwg", ".dxf"]);
-export const MAX_MODEL_SIZE_BYTES = 30 * 1024 * 1024; // 30 MB
+export const MAX_MODEL_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_PLANO_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export const isPlanoFile = (originalname: string): boolean =>
   PLANO_EXTENSIONS.has(path.extname(originalname).toLowerCase());
 
-// multer.memoryStorage bufferiza hasta el límite global (30 MB) aunque sea un plano; este
+// multer.memoryStorage bufferiza hasta el límite global (10 MB) aunque sea un plano; este
 // storage descarta lo recibido y falla apenas se supera el límite del tipo de archivo.
 const boundedMemoryStorage: multer.StorageEngine = {
   _handleFile(_req, file, cb) {

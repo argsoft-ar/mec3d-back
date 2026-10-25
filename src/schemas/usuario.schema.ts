@@ -58,9 +58,7 @@ export const getFabricantesSchema = z.object({
 export const changeRolSchema = z.object({
   body: z.object({
     rol: z.enum(["comprador", "disenador", "fabricante"], {
-      errorMap: () => ({
-        message: "Rol debe ser comprador, disenador o fabricante",
-      }),
+      error: "Rol debe ser comprador, disenador o fabricante",
     }),
   }),
 });

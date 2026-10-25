@@ -13,11 +13,10 @@ export const getAllProducts = async (
       limit: Number(req.query.limit) || 12,
     };
 
-    const zonaId = req.query.zonaId ? Number(req.query.zonaId) : undefined;
     const categoria =
       typeof req.query.categoria === "string" ? req.query.categoria : undefined;
 
-    const result = await productService.getAll(pagination, zonaId, categoria);
+    const result = await productService.getAll(pagination, categoria);
     res.status(200).json(result);
   } catch (error) {
     next(error);

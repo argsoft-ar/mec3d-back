@@ -417,8 +417,5 @@ describe("categoria", () => {
       listProductsSchema.safeParse({ query: { categoria: "a".repeat(101) } })
         .success,
     ).toBe(false);
-    expect(
-      listProductsSchema.safeParse({ query: { zonaId: "abc" } }).success,
-    ).toBe(false);
   });
 });

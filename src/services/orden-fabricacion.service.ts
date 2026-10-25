@@ -8,6 +8,7 @@ import { disenoRepository } from "../repositories/diseno.repository";
 import { getProvinciaPrefix } from "../utils/zona.util";
 import { pesosACentavos } from "../utils/money.util";
 import { withTransaction } from "../utils/transaction.util";
+import { sanitizeForLog } from "../utils/log.util";
 import {
   MAX_INTENTOS_CODIGO,
   generarCodigoEntrega,
@@ -679,7 +680,7 @@ export const ordenFabricacionService = {
         );
       }
       console.warn(
-        `🔒 Intento de confirmar entrega sobre orden bloqueada ${ordenId} (fabricante ${userId})`,
+        `🔒 Intento de confirmar entrega sobre orden bloqueada ${sanitizeForLog(ordenId)} (fabricante ${sanitizeForLog(userId)})`,
       );
       throw new TooManyRequestsError(
         "Se superó el máximo de intentos. Pedile al comprador que genere un código nuevo",
@@ -695,7 +696,7 @@ export const ordenFabricacionService = {
     if (!coincide) {
       if (intentos >= MAX_INTENTOS_CODIGO) {
         console.warn(
-          `🔒 Orden ${ordenId} bloqueada tras ${intentos} intentos fallidos de código (fabricante ${userId})`,
+          `🔒 Orden ${sanitizeForLog(ordenId)} bloqueada tras ${intentos} intentos fallidos de código (fabricante ${sanitizeForLog(userId)})`,
         );
         throw new TooManyRequestsError(
           "Se superó el máximo de intentos. Pedile al comprador que genere un código nuevo",

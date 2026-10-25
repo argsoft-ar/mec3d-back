@@ -52,7 +52,9 @@ export const usernameCheckLimiter = rateLimit({
 export const previewPublicoLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   max: 60,
-  message: { error: "Demasiadas solicitudes de vista previa, intente más tarde" },
+  message: {
+    error: "Demasiadas solicitudes de vista previa, intente más tarde",
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -76,7 +78,7 @@ export const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Tope de subidas simultáneas (cada una bufferiza hasta 30 MB en memoria), por usuario y
+// Tope de subidas simultáneas (cada una bufferiza hasta 10 MB en memoria), por usuario y
 // global. Va antes de multer para rechazar sin leer el cuerpo; el cupo se libera al terminar
 // la respuesta (finish) o cortarse la conexión (close/error). Contadores en memoria de la instancia.
 export function createUploadConcurrencyLimiter(
