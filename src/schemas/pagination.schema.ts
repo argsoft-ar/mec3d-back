@@ -7,7 +7,10 @@ export const paginationSchema = z.object({
       .regex(/^\d+$/, "page debe ser un número entero positivo")
       .transform(Number)
       .default(1)
-      .refine((n) => n >= 1 && n <= 100_000, "page debe estar entre 1 y 100000"),
+      .refine(
+        (n) => n >= 1 && n <= 100_000,
+        "page debe estar entre 1 y 100000",
+      ),
     limit: z
       .string()
       .regex(/^\d+$/, "limit debe ser un número entero positivo")

@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { ZodObject, ZodError } from 'zod';
+import { Request, Response, NextFunction } from "express";
+import { ZodObject, ZodError } from "zod";
 
 export const validateSchema = (schema: ZodObject) => {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -15,15 +15,17 @@ export const validateSchema = (schema: ZodObject) => {
         params: req.params,
       });
       if (parsed.body !== undefined) req.body = parsed.body;
-      if (parsed.query !== undefined) req.query = parsed.query as Request['query'];
-      if (parsed.params !== undefined) req.params = parsed.params as Request['params'];
+      if (parsed.query !== undefined)
+        req.query = parsed.query as Request["query"];
+      if (parsed.params !== undefined)
+        req.params = parsed.params as Request["params"];
       next();
     } catch (error) {
       if (error instanceof ZodError) {
         res.status(400).json({
-          error: 'Error de validación en los datos ingresados',
-          details: error.issues.map(err => ({
-            path: err.path.join('.'),
+          error: "Error de validación en los datos ingresados",
+          details: error.issues.map((err) => ({
+            path: err.path.join("."),
             message: err.message,
           })),
         });
