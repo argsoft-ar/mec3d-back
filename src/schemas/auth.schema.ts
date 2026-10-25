@@ -26,9 +26,7 @@ export const registerSchema = z.object({
     username: usernameSchema,
     password: passwordSchema,
     rolPrincipal: z.enum(publicRoles, {
-      errorMap: () => ({
-        message: "Rol no válido. Debe ser comprador, disenador o fabricante",
-      }),
+      error: "Rol no válido. Debe ser comprador, disenador o fabricante",
     }),
     zonaId: z
       .number()
@@ -64,7 +62,7 @@ export const adminCreateUserSchema = z.object({
       .string()
       .min(8, "La contraseña debe tener al menos 8 caracteres"),
     rolPrincipal: z.enum(allRoles, {
-      errorMap: () => ({ message: "Rol no válido" }),
+      error: "Rol no válido",
     }),
     zonaId: z.number().int().positive().max(99_999_999).optional(),
   }),

@@ -21,7 +21,6 @@ import {
   ValidationError,
   ConflictError,
 } from "../errors/app-error";
-import { getProvinciaPrefix, getPartidoPrefix } from "../utils/zona.util";
 import {
   esCategoriaPlano,
   esFormatoPlano,
@@ -216,25 +215,14 @@ function mapRowToProduct(row: any): Product {
 export const productService = {
   async getAll(
     pagination: PaginationParams,
-    zonaId?: number,
     categoria?: string,
   ): Promise<PaginatedResponse<Product>> {
     const { page, limit } = pagination;
     const offset = (page - 1) * limit;
 
-    const zona =
-      zonaId !== undefined
-        ? {
-            zonaId,
-            provinciaPrefix: getProvinciaPrefix(zonaId),
-            partidoPrefix: getPartidoPrefix(zonaId),
-          }
-        : undefined;
-
     const { rows, total } = await disenoRepository.getAllProductsPaginated(
       limit,
       offset,
-      zona,
       categoria,
     );
     const products = rows.map(mapRowToProduct);

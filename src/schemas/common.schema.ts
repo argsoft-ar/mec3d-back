@@ -48,13 +48,13 @@ export const fabricantesPaginationQuery = {
     .string()
     .regex(/^\d{1,6}$/, "page debe ser un número entero positivo")
     .transform(Number)
-    .default("1")
+    .default(1)
     .refine((n) => n >= 1, "page debe ser mayor o igual a 1"),
   limit: z
     .string()
     .regex(/^\d{1,3}$/, "limit debe ser un número entero positivo")
     .transform(Number)
-    .default("50")
+    .default(50)
     .refine(
       (n) => n >= 1 && n <= MAX_FABRICANTES_PAGE_SIZE,
       `limit debe estar entre 1 y ${MAX_FABRICANTES_PAGE_SIZE}`,
