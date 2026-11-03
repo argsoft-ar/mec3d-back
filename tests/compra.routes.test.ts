@@ -50,7 +50,9 @@ beforeEach(() => {
     .spyOn(ordenFabricacionRepository, "cancelarAbiertasPorCompra")
     .mockResolvedValue([]);
   jest.spyOn(pagoRepository, "lockPorCompra").mockResolvedValue([]);
-  jest.spyOn(pagoRepository, "rechazarPendientesPorCompra").mockResolvedValue(0);
+  jest
+    .spyOn(pagoRepository, "rechazarPendientesPorCompra")
+    .mockResolvedValue(0);
 });
 
 afterEach(() => {

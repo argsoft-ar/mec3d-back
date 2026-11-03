@@ -28,9 +28,9 @@ describe("refinarZonas", () => {
   });
 
   it("una localidad Georef de 11 dígitos también refina departamento y provincia", () => {
-    expect(
-      refinarZonas(z(["06", "02"], ["06441"], ["06441030000"])),
-    ).toEqual(z(["02"], [], ["06441030000"]));
+    expect(refinarZonas(z(["06", "02"], ["06441"], ["06441030000"]))).toEqual(
+      z(["02"], [], ["06441030000"]),
+    );
   });
 
   it("una localidad sin departamento elegido descarta igual su provincia", () => {

@@ -105,7 +105,10 @@ beforeEach(() => {
 describe("compraService.cancelar", () => {
   it("tras el commit expira en MP las preferences de los pagos de la compra", async () => {
     await compraService.cancelar(COMPRA_ID, COMPRADOR);
-    expect(pagoSvc.expirarPreferences).toHaveBeenCalledWith(["pref-1", "pref-0"]);
+    expect(pagoSvc.expirarPreferences).toHaveBeenCalledWith([
+      "pref-1",
+      "pref-0",
+    ]);
     expect(compras.cancelar.mock.invocationCallOrder[0]).toBeLessThan(
       pagoSvc.expirarPreferences.mock.invocationCallOrder[0],
     );
@@ -229,8 +232,8 @@ describe("compraService.cancelar", () => {
 
   it("si un fallo del chat ocurre post-commit, la cancelación igual responde ok", async () => {
     chat.crearMensaje.mockRejectedValue(new Error("chat caído"));
-    await expect(
-      compraService.cancelar(COMPRA_ID, COMPRADOR),
-    ).resolves.toEqual({ compraId: COMPRA_ID, estado: "cancelada" });
+    await expect(compraService.cancelar(COMPRA_ID, COMPRADOR)).resolves.toEqual(
+      { compraId: COMPRA_ID, estado: "cancelada" },
+    );
   });
 });

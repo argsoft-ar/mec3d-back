@@ -431,9 +431,7 @@ export const ordenFabricacionService = {
         localidadesCensales: [
           ...new Set(refinadas.localidades.map((l) => l.slice(0, 8))),
         ],
-        localidadesGeoref: refinadas.localidades.filter(
-          (l) => l.length === 11,
-        ),
+        localidadesGeoref: refinadas.localidades.filter((l) => l.length === 11),
       },
     );
 

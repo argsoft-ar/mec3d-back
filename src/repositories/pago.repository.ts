@@ -119,10 +119,7 @@ export const pagoRepository = {
 
   // Cancelación de la compra: los intentos pendientes quedan 'rechazado'. Un cobro tardío de
   // MP sobre esa preference cae en el camino de reembolso ('compra_cancelada').
-  async rechazarPendientesPorCompra(
-    db: Db,
-    compraId: string,
-  ): Promise<number> {
+  async rechazarPendientesPorCompra(db: Db, compraId: string): Promise<number> {
     const result = await db.query(
       `UPDATE pagos
        SET estado = 'rechazado', mp_status_detail = 'compra_cancelada', actualizado_en = now()

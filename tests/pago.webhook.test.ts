@@ -1006,7 +1006,8 @@ describe("expirarPreferences", () => {
     await pagoService.expirarPreferences(["pref-1", "pref-2"]);
 
     expect(mockPreferenceUpdate).toHaveBeenCalledTimes(2);
-    const [{ id, updatePreferenceRequest }] = mockPreferenceUpdate.mock.calls[0];
+    const [{ id, updatePreferenceRequest }] =
+      mockPreferenceUpdate.mock.calls[0];
     expect(id).toBe("pref-1");
     expect(updatePreferenceRequest.expires).toBe(true);
     const hasta = Date.parse(updatePreferenceRequest.expiration_date_to);
@@ -1015,7 +1016,9 @@ describe("expirarPreferences", () => {
   });
 
   it("un fallo de MP se loguea y no corta las siguientes ni lanza", async () => {
-    const error = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const error = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     mockPreferenceUpdate
       .mockRejectedValueOnce(new Error("MP caído"))
       .mockResolvedValueOnce({});
