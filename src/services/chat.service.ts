@@ -1,7 +1,12 @@
 import { chatRepository } from "../repositories/chat.repository";
 import { ForbiddenError, NotFoundError } from "../errors/app-error";
 import { PaginatedResponse } from "../interfaces/pagination.interface";
-import { Mensaje, ConversacionResumen } from "../interfaces/chat.interface";
+import {
+  Mensaje,
+  ConversacionResumen,
+  ConversacionLeida,
+  NoLeidosTotal,
+} from "../interfaces/chat.interface";
 
 // Exportado: chat.socket.ts y orden-fabricacion.service.ts emiten mensajes por
 // socket y necesitan el mismo mapeo snake_case -> camelCase que la API REST,
@@ -57,8 +62,25 @@ function mapConversacionResumen(row: any, userId: string): ConversacionResumen {
             creadoEn: row.ultimo_mensaje_creado_en,
           }
         : null,
+    noLeidos: Number(row.no_leidos ?? 0),
     creadoEn: row.creado_en,
   };
+}
+
+async function assertParticipante(
+  conversacionId: string,
+  userId: string,
+): Promise<void> {
+  const conversacion = await chatRepository.getById(conversacionId);
+  if (!conversacion) {
+    throw new NotFoundError("Conversación no encontrada");
+  }
+  if (
+    conversacion.comprador_id !== userId &&
+    conversacion.fabricante_id !== userId
+  ) {
+    throw new ForbiddenError("No autorizado para ver esta conversación");
+  }
 }
 
 export const chatService = {
@@ -68,16 +90,7 @@ export const chatService = {
     page: number,
     limit: number,
   ): Promise<PaginatedResponse<Mensaje>> {
-    const conversacion = await chatRepository.getById(conversacionId);
-    if (!conversacion) {
-      throw new NotFoundError("Conversación no encontrada");
-    }
-    if (
-      conversacion.comprador_id !== userId &&
-      conversacion.fabricante_id !== userId
-    ) {
-      throw new ForbiddenError("No autorizado para ver esta conversación");
-    }
+    await assertParticipante(conversacionId, userId);
 
     const offset = (page - 1) * limit;
     const { rows, total } = await chatRepository.getMensajesPaginated(
@@ -85,6 +98,8 @@ export const chatService = {
       limit,
       offset,
     );
+    // Abrir el historial equivale a leer la conversación.
+    await chatRepository.marcarLeida(conversacionId, userId);
 
     return {
       data: rows.map(mapMensaje),
@@ -100,5 +115,18 @@ export const chatService = {
   async listarConversaciones(userId: string): Promise<ConversacionResumen[]> {
     const rows = await chatRepository.getConversacionesByUsuario(userId);
     return rows.map((row: any) => mapConversacionResumen(row, userId));
+  },
+
+  async contarNoLeidos(userId: string): Promise<NoLeidosTotal> {
+    return { total: await chatRepository.contarNoLeidosTotal(userId) };
+  },
+
+  async marcarLeida(
+    conversacionId: string,
+    userId: string,
+  ): Promise<ConversacionLeida> {
+    await assertParticipante(conversacionId, userId);
+    await chatRepository.marcarLeida(conversacionId, userId);
+    return { conversacionId, noLeidos: 0 };
   },
 };

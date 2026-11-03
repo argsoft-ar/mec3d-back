@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { z } from "zod";
 import { AppError } from "../errors/app-error";
+import { quitarBarrasFinales } from "../utils/url.util";
 
 // Cargar variables de entorno de inmediato
 dotenv.config();
@@ -186,7 +187,7 @@ function parseMercadoPagoEnv(
       accessToken: data.MP_ACCESS_TOKEN,
       webhookSecret: data.MP_WEBHOOK_SECRET,
       notificationUrl: data.MP_NOTIFICATION_URL,
-      frontendUrl: data.FRONTEND_URL.replace(/\/+$/, ""),
+      frontendUrl: quitarBarrasFinales(data.FRONTEND_URL),
     },
   };
 }

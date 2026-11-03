@@ -3,12 +3,14 @@ import {
   partialUpdateProductSchema,
   MAX_PRINT_HOURS,
   MAX_PRECIO_BASE,
+  MAX_PESO_GRAMOS,
 } from "../src/schemas/diseno.schema";
 
 const validBody = {
   titulo: "Engranaje",
   archivoUrl: "https://cdn.test.example/mec3d/modelos/a.stl",
   precioBase: 1500.5,
+  pesoGramos: 120,
   tecnologia: "Impresión 3D",
   materiales: ["PLA", "PETG"],
   especificaciones: {
@@ -72,6 +74,31 @@ describe("createProductSchema", () => {
     };
     expect(parse(body).success).toBe(true);
   });
+
+  it("exige pesoGramos", () => {
+    const { pesoGramos, ...sinPeso } = validBody;
+    const result = parse(sinPeso);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path.join("."))).toContain(
+      "body.pesoGramos",
+    );
+  });
+
+  it.each([
+    ["decimal", 10.5],
+    ["negativo", -5],
+    ["cero", 0],
+    ["string", "120"],
+    ["sobre el máximo", MAX_PESO_GRAMOS + 1],
+  ])("rechaza pesoGramos %s", (_name, pesoGramos) => {
+    expect(parse({ ...validBody, pesoGramos }).success).toBe(false);
+  });
+
+  it("acepta pesoGramos en el límite máximo", () => {
+    expect(parse({ ...validBody, pesoGramos: MAX_PESO_GRAMOS }).success).toBe(
+      true,
+    );
+  });
 });
 
 describe("createProductSchema - planos técnicos", () => {
@@ -79,6 +106,7 @@ describe("createProductSchema - planos técnicos", () => {
     titulo: "Plano de engranaje",
     archivoUrl: "https://cdn.test.example/mec3d/modelos/a.pdf",
     precioBase: 500,
+    pesoGramos: 10,
     categoria: "Planos técnicos",
     formato: "PDF",
   };
@@ -151,5 +179,14 @@ describe("partialUpdateProductSchema", () => {
       body: { materiales: [] },
     });
     expect(result.success).toBe(false);
+  });
+
+  it("pesoGramos es opcional pero se valida si viene", () => {
+    const p = (body: unknown) =>
+      partialUpdateProductSchema.safeParse({ body }).success;
+    expect(p({ titulo: "Otro título" })).toBe(true);
+    expect(p({ pesoGramos: 250 })).toBe(true);
+    expect(p({ pesoGramos: 2.5 })).toBe(false);
+    expect(p({ pesoGramos: -1 })).toBe(false);
   });
 });

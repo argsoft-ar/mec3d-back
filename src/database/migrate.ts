@@ -84,4 +84,7 @@ const migrate = async () => {
   if (failed) process.exit(1);
 };
 
-void migrate();
+migrate().catch((err) => {
+  console.error("❌ Error inesperado en la migración:", err);
+  process.exit(1);
+});

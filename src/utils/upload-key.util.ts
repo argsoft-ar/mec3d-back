@@ -1,4 +1,5 @@
 import type { UploadTipo } from "../interfaces/upload.interface";
+import { quitarBarrasFinales } from "./url.util";
 
 const R2_MODELOS_PREFIX = "mec3d/modelos/";
 const CLOUDINARY_PORTADAS_PREFIX = "mec3d/portadas/";
@@ -24,7 +25,7 @@ export function extractR2Key(
   if (!url || !base) return null;
   if (url.origin !== base.origin) return null;
 
-  const basePath = base.pathname.replace(/\/+$/, "");
+  const basePath = quitarBarrasFinales(base.pathname);
   if (!url.pathname.startsWith(`${basePath}/`)) return null;
 
   let key: string;

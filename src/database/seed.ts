@@ -403,4 +403,7 @@ import { guardOrExit } from "./guard";
     client.release();
     await pool.end();
   }
-})();
+})().catch((err) => {
+  console.error("❌ Error inesperado en db:seed:", err);
+  process.exit(1);
+});

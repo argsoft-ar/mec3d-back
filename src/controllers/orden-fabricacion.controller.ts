@@ -1,7 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { ordenFabricacionService } from "../services/orden-fabricacion.service";
 import { disputaService } from "../services/disputa.service";
-import type { DisputasQuery } from "../schemas/orden-fabricacion.schema";
+import type {
+  DisputasQuery,
+  FabricantesSugeridosQuery,
+} from "../schemas/orden-fabricacion.schema";
+import type { PaginationQuery } from "../schemas/pagination.schema";
 
 export const crearOrdenesFabricacion = async (
   req: Request,
@@ -42,14 +46,17 @@ export const getFabricantesSugeridos = async (
       res.status(401).json({ error: "No autorizado" });
       return;
     }
-    const disenoId = req.query.disenoId as string;
-    const compraId = req.query.compraId as string;
-    const material = req.query.material as string | undefined;
-    // page y limit ya vienen validados (limit <= 50) y convertidos a number.
-    const { page, limit } = req.query as unknown as {
-      page: number;
-      limit: number;
-    };
+    // Query ya validada: page/limit (limit <= 50) como number y zonas normalizadas.
+    const {
+      disenoId,
+      compraId,
+      material,
+      page,
+      limit,
+      provincias,
+      departamentos,
+      localidades,
+    } = req.query as unknown as FabricantesSugeridosQuery;
     const fabricantes = await ordenFabricacionService.fabricantesSugeridos(
       disenoId,
       compraId,
@@ -57,6 +64,11 @@ export const getFabricantesSugeridos = async (
       page,
       limit,
       material,
+      {
+        provincias: provincias ?? [],
+        departamentos: departamentos ?? [],
+        localidades: localidades ?? [],
+      },
     );
     res.status(200).json(fabricantes);
   } catch (error) {
@@ -108,7 +120,7 @@ export const cerrarTrato = async (
     const { orden, pagoRequerido, initPoint } =
       await ordenFabricacionService.cerrarTrato(id, precio, userId);
     res.status(200).json({
-      message: "Confirmación de cierre registrada",
+      message: "Presupuesto aceptado, trato cerrado",
       data: orden,
       pagoRequerido,
       initPoint,
@@ -224,6 +236,46 @@ export const getMisSolicitudesFabricacion = async (
 
     const ordenes = await ordenFabricacionService.misSolicitudes(fabricanteId);
     res.status(200).json({ message: "Solicitudes obtenidas", data: ordenes });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getOrdenesCerradasFabricante = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+    const { page, limit } = req.query as unknown as PaginationQuery;
+    const { data, meta } = await ordenFabricacionService.cerradasFabricante(
+      userId,
+      { page, limit },
+    );
+    res.status(200).json({ message: "Órdenes cerradas obtenidas", data, meta });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDisenoOrden = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+    const data = await ordenFabricacionService.getDiseno(req.params.id, userId);
+    res.status(200).json({ message: "Diseño de la orden obtenido", data });
   } catch (error) {
     next(error);
   }

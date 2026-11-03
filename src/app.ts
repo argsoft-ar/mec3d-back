@@ -9,6 +9,7 @@ import { envConfig } from "./config/env.config";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import { apiLimiter } from "./middlewares/rate-limit.middleware";
 import { swaggerSpec } from "./docs/swagger.config";
+import { quitarBarrasFinales } from "./utils/url.util";
 
 // Inicializar Express
 const app: Application = express();
@@ -21,7 +22,7 @@ app.set("trust proxy", 1);
 // Se eliminan slashes finales para evitar mismatch con el header Origin del browser
 const allowedOrigins = envConfig.cors.origin
   .split(",")
-  .map((o) => o.trim().replace(/\/+$/, ""));
+  .map((o) => quitarBarrasFinales(o.trim()));
 
 // Middlewares de seguridad y utilidades
 app.use(helmet()); // Protege configurando cabeceras HTTP

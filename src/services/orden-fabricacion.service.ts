@@ -5,8 +5,8 @@ import { chatRepository } from "../repositories/chat.repository";
 import { mapMensaje } from "./chat.service";
 import { userRepository } from "../repositories/user.repository";
 import { disenoRepository } from "../repositories/diseno.repository";
-import { getProvinciaPrefix } from "../utils/zona.util";
-import { pesosACentavos } from "../utils/money.util";
+import { getProvinciaPrefix, refinarZonas } from "../utils/zona.util";
+import { centavosAPesos, pesosACentavos } from "../utils/money.util";
 import { withTransaction } from "../utils/transaction.util";
 import { sanitizeForLog } from "../utils/log.util";
 import {
@@ -26,15 +26,28 @@ import { pagoService } from "./pago.service";
 import { archivoService } from "./archivo.service";
 import { solicitarPayouts } from "./payout.provider";
 import { getIO } from "../sockets/io.instance";
+import { notificarMensaje, notificarUsuario } from "../sockets/notificaciones";
+import { aTextoPlano } from "../utils/texto.util";
+import {
+  MensajeCreadoRow,
+  NuevaSolicitudFabricacion,
+} from "../interfaces/chat.interface";
 import {
   OrdenFabricacion,
   OrdenFabricacionCreada,
   OrdenFabricacionListItem,
   FabricanteSugerido,
+  FiltroZonas,
   CodigoEntregaResponse,
   CancelarOrdenResultado,
   CerrarTratoResultado,
+  OrdenDisenoResponse,
+  OrdenCerradaFabricanteItem,
 } from "../interfaces/orden-fabricacion.interface";
+import {
+  PaginatedResponse,
+  PaginationParams,
+} from "../interfaces/pagination.interface";
 import { CompraRow, ResultadoReembolso } from "../interfaces/pago.interface";
 import {
   NotFoundError,
@@ -55,6 +68,27 @@ const ESTADOS_FINALES = [
 ];
 
 type Rol = "comprador" | "fabricante";
+
+// Estados con trato cerrado que el fabricante ve en su dashboard.
+const ESTADOS_CERRADOS_FABRICANTE = [
+  "trato_cerrado",
+  "confirmada",
+  "completado",
+];
+
+// Ventana de descarga del archivo: trato cerrado hasta confirmarse la entrega, con pago acreditado.
+const ESTADOS_DESCARGA = ["trato_cerrado", "confirmada"];
+
+function puedeDescargarArchivo(
+  row: { fabricante_id: string; estado: string; compra_estado: string },
+  userId: string,
+): boolean {
+  return (
+    row.fabricante_id === userId &&
+    ESTADOS_DESCARGA.includes(row.estado) &&
+    row.compra_estado === "pagada"
+  );
+}
 
 function resolveRole(orden: any, userId: string): Rol {
   if (orden.id_comprador === userId) return "comprador";
@@ -131,9 +165,49 @@ export async function emitirMensajeSistema(
         ...extra,
         mensaje: mapMensaje(mensajeSistema),
       });
+    notificarMensaje(mensajeSistema);
   } catch (error) {
     console.error(
       `❌ No se pudo notificar "${evento}" de la orden ${ordenId}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+// Post-commit: avisa a cada fabricante con conversación nueva; un fallo acá no revierte las órdenes.
+async function notificarSolicitudes(
+  creadas: {
+    orden: { id: string; fabricante_id: string };
+    conversacionId: string;
+    mensajeSolicitud: MensajeCreadoRow | null;
+  }[],
+  ctx: { disenoId: string; disenoTitulo: string; compradorId: string },
+): Promise<void> {
+  const nuevas = creadas.filter((c) => c.mensajeSolicitud !== null);
+  if (nuevas.length === 0) return;
+  try {
+    const comprador = await userRepository.findById(ctx.compradorId);
+    const compradorUsername: string | null = comprador?.username ?? null;
+    for (const { orden, conversacionId, mensajeSolicitud } of nuevas) {
+      const payload: NuevaSolicitudFabricacion = {
+        ordenId: orden.id,
+        conversacionId,
+        disenoId: ctx.disenoId,
+        disenoTitulo: ctx.disenoTitulo,
+        compradorUsername,
+      };
+      notificarUsuario(
+        orden.fabricante_id,
+        "nueva-solicitud-fabricacion",
+        payload,
+      );
+      if (mensajeSolicitud) {
+        notificarMensaje(mensajeSolicitud, [ctx.compradorId]);
+      }
+    }
+  } catch (error) {
+    console.error(
+      "❌ No se pudieron notificar las solicitudes de fabricación:",
       error instanceof Error ? error.message : error,
     );
   }
@@ -214,6 +288,7 @@ export const ordenFabricacionService = {
     // ninguna. El lock de la compra serializa solicitudes concurrentes sobre la misma compra.
     // Regla de negocio: un fabricante no puede tener más de una orden/conversación activa
     // con el mismo comprador para la misma compra; si ya existe, se reutiliza.
+    const disenoTitulo = aTextoPlano(String(diseno.titulo ?? ""), 200);
     const resultado = await withTransaction(async (client) => {
       const bloqueada = await compraRepository.lockById(client, compraId);
       if (!bloqueada) {
@@ -221,7 +296,11 @@ export const ordenFabricacionService = {
       }
       assertCompraAbiertaParaFabricacion(bloqueada);
 
-      const creadas: { orden: any; conversacionId: string }[] = [];
+      const creadas: {
+        orden: any;
+        conversacionId: string;
+        mensajeSolicitud: MensajeCreadoRow | null;
+      }[] = [];
       for (const fabricanteId of fabricanteIds) {
         const orden =
           (await ordenFabricacionRepository.getActivaPorCompradorYFabricante(
@@ -237,8 +316,12 @@ export const ordenFabricacionService = {
             client,
           ));
 
+        const existente = await chatRepository.getByOrdenFabricacionId(
+          orden.id,
+          client,
+        );
         const conversacion =
-          (await chatRepository.getByOrdenFabricacionId(orden.id, client)) ??
+          existente ??
           (await chatRepository.createConversacion(
             {
               ordenFabricacionId: orden.id,
@@ -247,9 +330,39 @@ export const ordenFabricacionService = {
             },
             client,
           ));
-        creadas.push({ orden, conversacionId: conversacion.id });
+
+        // Solo en conversaciones nuevas: el aviso queda en el hilo y cuenta como no leído
+        // para el fabricante; el comprador (quien lo originó) queda al día.
+        let mensajeSolicitud: MensajeCreadoRow | null = null;
+        if (!existente) {
+          mensajeSolicitud = await chatRepository.crearMensaje(
+            {
+              conversacionId: conversacion.id,
+              remitenteId: null,
+              contenido: `Nueva solicitud de fabricación para «${disenoTitulo}»`,
+              tipo: "sistema",
+            },
+            client,
+          );
+          await chatRepository.marcarLeida(
+            conversacion.id,
+            compradorId,
+            client,
+          );
+        }
+        creadas.push({
+          orden,
+          conversacionId: conversacion.id,
+          mensajeSolicitud,
+        });
       }
       return creadas;
+    });
+
+    await notificarSolicitudes(resultado, {
+      disenoId: diseno.id,
+      disenoTitulo,
+      compradorId,
     });
 
     return resultado.map(({ orden, conversacionId }) => ({
@@ -265,6 +378,7 @@ export const ordenFabricacionService = {
     page: number,
     limit: number,
     material?: string,
+    zonas: FiltroZonas = { provincias: [], departamentos: [], localidades: [] },
   ): Promise<FabricanteSugerido[]> {
     const compra = await compraRepository.getById(compraId);
     if (!compra) {
@@ -300,6 +414,8 @@ export const ordenFabricacionService = {
           (m) => m.id,
         );
 
+    // Un nivel más específico reemplaza a su ancestro (ver refinarZonas); el resto va con OR.
+    const refinadas = refinarZonas(zonas);
     const rows = await ordenFabricacionRepository.getFabricantesSugeridos(
       diseno.tecnologia_id,
       materialIds,
@@ -308,11 +424,21 @@ export const ordenFabricacionService = {
       compradorId,
       limit,
       (page - 1) * limit,
+      {
+        provincias: refinadas.provincias,
+        departamentos: refinadas.departamentos,
+        // zona_id guarda la localidad censal (8 dígitos): un id Georef de 11 también matchea por ella.
+        localidadesCensales: [
+          ...new Set(refinadas.localidades.map((l) => l.slice(0, 8))),
+        ],
+        localidadesGeoref: refinadas.localidades.filter((l) => l.length === 11),
+      },
     );
 
     return rows.map((row: any) => ({
       id: row.id,
       zonaId: row.zona_id,
+      georefLocalidadId: row.georef_localidad_id ?? null,
       puntuacion: Number(row.puntuacion),
       tagline: row.tagline,
       username: row.username,
@@ -380,22 +506,19 @@ export const ordenFabricacionService = {
           orden: mapOrden(updated),
           mensaje: mapMensaje(mensajePropuesta),
         });
+      notificarMensaje(mensajePropuesta);
     }
 
     return mapOrden(updated);
   },
 
-  // Regla de negocio de cierre de trato (documentada acá porque no es evidente
-  // desde el código): cada llamada a este endpoint pisa el precio propuesto de
-  // quien la invoca y marca su flag de cierre en true. El trato solo se finaliza
-  // cuando AMBAS partes tienen su flag de cierre en true Y el precio que cada una
-  // confirmó coincide; si la otra parte todavía no cerró, o cerró con otro monto,
-  // la orden queda "en_negociacion" esperando acuerdo.
-  // Al finalizar, en la misma transacción: se fija el monto de la compra (centavos), se
-  // cancelan las órdenes hermanas y se genera el código de entrega. El pago del precio
-  // final se inicia después del commit: si el que cierra es el comprador se crea la
-  // preference en la misma respuesta (initPoint); si cierra el fabricante, el comprador
-  // la obtiene con POST /compras/:id/pagar (también si la creación falló).
+  // Regla de negocio de cierre de trato: el fabricante solo PROPONE precio (proponerPrecio);
+  // el comprador puede contraofertar, pero eso no cierra nada. Únicamente el comprador cierra
+  // el trato aceptando el presupuesto vigente del fabricante, sin doble confirmación. `precio`
+  // debe coincidir con esa propuesta para no aceptar un monto que el fabricante ya cambió.
+  // En la misma transacción: se fija el monto de la compra (centavos), se cancelan las órdenes
+  // hermanas y se genera el código de entrega. Tras el commit se crea la preference de pago
+  // (initPoint); si falla, el comprador reintenta con POST /compras/:id/pagar.
   async cerrarTrato(
     ordenId: string,
     precio: number,
@@ -406,10 +529,14 @@ export const ordenFabricacionService = {
       throw new NotFoundError("Orden de fabricación no encontrada");
     }
 
-    const role = resolveRole(orden, userId);
+    if (resolveRole(orden, userId) !== "comprador") {
+      throw new ForbiddenError(
+        "Solo el comprador puede aceptar el presupuesto",
+      );
+    }
     const precioCentavos = pesosACentavos(precio);
 
-    const resultado = await withTransaction(async (client) => {
+    const finalizada = await withTransaction(async (client) => {
       // Orden de locks: compra -> orden.
       const compra = await compraRepository.lockById(client, orden.compra_id);
       const bloqueada = await ordenFabricacionRepository.lockById(
@@ -434,38 +561,26 @@ export const ordenFabricacionService = {
         throw new ValidationError(MSG_PLANO_SIN_FABRICACION);
       }
 
-      const marcada = await ordenFabricacionRepository.marcarCierre(
-        ordenId,
-        role,
-        precio,
-        client,
-      );
-      if (!marcada) {
-        throw new ConflictError("Esta orden ya no admite cierre de trato");
+      const presupuesto: string | number | null =
+        bloqueada.precio_propuesto_fabricante ?? null;
+      if (presupuesto === null) {
+        throw new ConflictError(
+          "El fabricante todavía no propuso un presupuesto",
+          "SIN_PRESUPUESTO",
+        );
+      }
+      if (pesosACentavos(presupuesto) !== precioCentavos) {
+        throw new ConflictError(
+          "El presupuesto del fabricante cambió: revisá el precio vigente antes de aceptarlo",
+          "PRESUPUESTO_DESACTUALIZADO",
+        );
       }
 
-      const otroLadoConfirmo =
-        role === "comprador"
-          ? marcada.cerrado_por_fabricante
-          : marcada.cerrado_por_comprador;
-      const otroPrecio =
-        role === "comprador"
-          ? marcada.precio_propuesto_fabricante
-          : marcada.precio_propuesto_comprador;
-
-      if (
-        !otroLadoConfirmo ||
-        otroPrecio === null ||
-        pesosACentavos(otroPrecio) !== precioCentavos
-      ) {
-        return { orden: marcada, cerrado: false };
-      }
-
-      let finalizada;
+      let aceptada;
       try {
-        finalizada = await ordenFabricacionRepository.finalizarTrato(
+        aceptada = await ordenFabricacionRepository.aceptarPresupuesto(
           ordenId,
-          precio,
+          presupuesto,
           client,
         );
       } catch (error) {
@@ -475,8 +590,8 @@ export const ordenFabricacionService = {
         }
         throw error;
       }
-      if (!finalizada) {
-        throw new ConflictError("El trato para esta orden ya fue cerrado");
+      if (!aceptada) {
+        throw new ConflictError("Esta orden ya no admite cierre de trato");
       }
 
       if (
@@ -510,43 +625,31 @@ export const ordenFabricacionService = {
         throw new ConflictError("El trato para esta orden ya no está vigente");
       }
 
-      return { orden: finalizada, cerrado: true };
+      return aceptada;
     });
 
-    if (!resultado.cerrado) {
-      return {
-        orden: mapOrden({
-          ...resultado.orden,
-          compra_estado: "pendiente_pago",
-        }),
-        pagoRequerido: false,
-        initPoint: null,
-      };
-    }
-
+    const precioAcordado = centavosAPesos(precioCentavos);
     await emitirMensajeSistema(
       ordenId,
-      `Trato cerrado por $${precio}`,
+      `El comprador aceptó el presupuesto: trato cerrado por $${precioAcordado}`,
       "deal-closed",
-      { precioAcordado: precio, pagoRequerido: true },
+      { precioAcordado, pagoRequerido: true },
     );
 
     let initPoint: string | null = null;
-    if (role === "comprador") {
-      try {
-        initPoint = (await pagoService.iniciarPago(orden.compra_id, userId))
-          .initPoint;
-      } catch (error) {
-        // El trato ya está cerrado: el comprador reintenta con POST /compras/:id/pagar.
-        console.error(
-          `❌ No se pudo crear la preference de la orden ${ordenId}:`,
-          error instanceof Error ? error.message : error,
-        );
-      }
+    try {
+      initPoint = (await pagoService.iniciarPago(orden.compra_id, userId))
+        .initPoint;
+    } catch (error) {
+      // El trato ya está cerrado: el comprador reintenta con POST /compras/:id/pagar.
+      console.error(
+        `❌ No se pudo crear la preference de la orden ${ordenId}:`,
+        error instanceof Error ? error.message : error,
+      );
     }
 
     return {
-      orden: mapOrden({ ...resultado.orden, compra_estado: "pendiente_pago" }),
+      orden: mapOrden({ ...finalizada, compra_estado: "pendiente_pago" }),
       pagoRequerido: true,
       initPoint,
     };
@@ -894,7 +997,7 @@ export const ordenFabricacionService = {
     }
     // Ventana de descarga: desde que se cierra el trato hasta que se confirma la
     // entrega (estado pasa a 'completado' y la solicitud se oculta para el fabricante).
-    if (row.estado !== "trato_cerrado" && row.estado !== "confirmada") {
+    if (!ESTADOS_DESCARGA.includes(row.estado)) {
       throw new ConflictError(
         "El archivo solo está disponible mientras la orden está en curso",
       );
@@ -904,5 +1007,82 @@ export const ordenFabricacionService = {
       throw new ConflictError("El pago de la orden todavía no fue acreditado");
     }
     return (await archivoService.firmarUrl(row.archivo_url)).url;
+  },
+
+  // Specs del diseño para los participantes de la orden (mismo control que el resto del
+  // router: 404 si no existe, 403 si no participa). Nunca expone archivoUrl; puedeDescargar
+  // replica las reglas de GET /:id/descargar-diseno.
+  async getDiseno(
+    ordenId: string,
+    userId: string,
+  ): Promise<OrdenDisenoResponse> {
+    const row = await ordenFabricacionRepository.getDisenoDeOrden(ordenId);
+    if (!row) {
+      throw new NotFoundError("Orden de fabricación no encontrada");
+    }
+    resolveRole(row, userId);
+
+    const esPlano = esCategoriaPlano(row.categoria_nombre);
+    return {
+      ordenId: row.orden_id,
+      estado: row.estado,
+      material: row.material_nombre ?? null,
+      diseno: {
+        id: row.diseno_id,
+        titulo: row.titulo,
+        descripcion: row.descripcion ?? null,
+        imagenUrl: row.imagen_url ?? null,
+        // Ruta del preview degradado público; nunca la key de R2.
+        previewUrl:
+          row.tiene_preview && !esPlano
+            ? `/api/v1/productos/${row.diseno_id}/preview-publico`
+            : null,
+        categoria: row.categoria_nombre ?? null,
+        tecnologia: row.tecnologia_nombre ?? null,
+        materiales: row.materiales_nombres ?? [],
+        formato: row.formato ?? null,
+        pesoGramos: row.peso_gramos ?? null,
+        especificaciones: row.especificaciones ?? null,
+      },
+      puedeDescargar: puedeDescargarArchivo(row, userId),
+    };
+  },
+
+  // El rol se relee de la DB (como requireAdmin): un JWT viejo no concede acceso.
+  async cerradasFabricante(
+    userId: string,
+    { page, limit }: PaginationParams,
+  ): Promise<PaginatedResponse<OrdenCerradaFabricanteItem>> {
+    const usuario = await userRepository.findById(userId);
+    if (usuario?.rol_principal !== "fabricante") {
+      throw new ForbiddenError(
+        "Solo los fabricantes pueden ver sus órdenes cerradas",
+      );
+    }
+    const { rows, total } =
+      await ordenFabricacionRepository.getCerradasPorFabricante(
+        userId,
+        ESTADOS_CERRADOS_FABRICANTE,
+        limit,
+        (page - 1) * limit,
+      );
+    return {
+      data: rows.map((row: any) => ({
+        id: row.id,
+        compraId: row.compra_id,
+        estado: row.estado,
+        disenoId: row.diseno_id,
+        disenoTitulo: row.diseno_titulo,
+        disenoImagenUrl: row.diseno_imagen_url ?? null,
+        compradorUsername: row.comprador_username ?? null,
+        precioAcordado:
+          row.precio_acordado !== null ? Number(row.precio_acordado) : null,
+        material: row.material_nombre ?? null,
+        fechaCierre: row.cerrado_en ?? null,
+        actualizadoEn: row.actualizado_en ?? null,
+        conversacionId: row.conversacion_id ?? null,
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   },
 };

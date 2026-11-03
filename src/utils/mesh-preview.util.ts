@@ -252,19 +252,60 @@ function extraerModelos(buf: Uint8Array): Uint8Array[] {
   return archivos.map((trozos) => Buffer.concat(trozos));
 }
 
-// Atributos requeridos de una etiqueta (comillas dobles o simples); lanza si falta alguno.
-// El largo de la etiqueta está acotado: limita el backtracking de la regex.
-const ATRIBUTO_RE = /([A-Za-z_][\w.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+const esInicioNombre = (c: number) =>
+  (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95;
+const esCharNombre = (c: number) =>
+  esInicioNombre(c) || (c >= 48 && c <= 57) || c === 45 || c === 46 || c === 58;
+// Un solo carácter: trim() elimina exactamente el mismo conjunto que \s.
+const esEspacio = (ch: string) => ch.trim() === "";
 
+// Pares nombre="valor" / nombre='valor' en orden; equivale a
+// /([A-Za-z_][\w.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g pero en tiempo lineal.
+export function leerAtributos(tag: string): [string, string][] {
+  const pares: [string, string][] = [];
+  const n = tag.length;
+  let i = 0;
+  while (i < n) {
+    if (!esInicioNombre(tag.charCodeAt(i))) {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    while (j < n && esCharNombre(tag.charCodeAt(j))) j++;
+    // Si falla desde i, falla desde cualquier posición dentro del mismo nombre: se reanuda en j.
+    let k = j;
+    while (k < n && esEspacio(tag[k])) k++;
+    if (tag[k] !== "=") {
+      i = j;
+      continue;
+    }
+    k++;
+    while (k < n && esEspacio(tag[k])) k++;
+    const q = tag[k];
+    if (q !== '"' && q !== "'") {
+      i = j;
+      continue;
+    }
+    // Sin cierre no quedan más comillas de ese tipo: indexOf falla a lo sumo una vez por tipo.
+    const cierre = tag.indexOf(q, k + 1);
+    if (cierre === -1) {
+      i = j;
+      continue;
+    }
+    pares.push([tag.slice(i, j), tag.slice(k + 1, cierre)]);
+    i = cierre + 1;
+  }
+  return pares;
+}
+
+// Atributos requeridos de una etiqueta (comillas dobles o simples); lanza si falta alguno.
 function atributosNumericos(tag: string, nombres: readonly string[]): number[] {
   if (tag.length > MAX_ETIQUETA_XML)
     throw new Error("3MF inválido: etiqueta demasiado larga");
   const valores: (string | undefined)[] = new Array(nombres.length);
-  ATRIBUTO_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = ATRIBUTO_RE.exec(tag)) !== null) {
-    const i = nombres.indexOf(m[1]);
-    if (i >= 0) valores[i] = m[2] ?? m[3];
+  for (const [nombre, valor] of leerAtributos(tag)) {
+    const i = nombres.indexOf(nombre);
+    if (i >= 0) valores[i] = valor;
   }
   return nombres.map((nombre, i) => {
     const valor = valores[i]?.trim();
