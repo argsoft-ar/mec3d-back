@@ -8,6 +8,10 @@ import { productPaths } from "./product.docs";
 import { uploadPaths } from "./upload.docs";
 import { catalogoPaths } from "./catalogo.docs";
 import { pagoPaths, pagoSchemaDoc } from "./pago.docs";
+import {
+  ordenFabricacionPaths,
+  ordenFabricacionSchemaDoc,
+} from "./orden-fabricacion.docs";
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -41,6 +45,7 @@ const options: swaggerJsdoc.Options = {
         ...errorSchemaDoc,
         ...paginationSchemaDoc,
         ...pagoSchemaDoc,
+        ...ordenFabricacionSchemaDoc,
       },
     },
     paths: {
@@ -49,6 +54,7 @@ const options: swaggerJsdoc.Options = {
       ...uploadPaths,
       ...catalogoPaths,
       ...pagoPaths,
+      ...ordenFabricacionPaths,
     },
   },
   apis: [],

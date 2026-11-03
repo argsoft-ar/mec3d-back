@@ -27,6 +27,8 @@ export interface Product {
   reviewCount: number;
   downloads: number;
   price: number;
+  // null solo en diseños cargados antes de que el peso fuera obligatorio.
+  pesoGramos: number | null;
   format: string;
   categoria?: string;
   // null (y materiales []) en planos técnicos sin tecnología.
@@ -44,6 +46,7 @@ export interface CreateProductDTO {
   imagenUrl?: string;
   archivoUrl: string;
   precioBase: number;
+  pesoGramos: number;
   formato?: string;
   categoria?: string;
   // Obligatorios salvo en la categoría "Planos técnicos".

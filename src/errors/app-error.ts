@@ -1,15 +1,19 @@
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly isOperational: boolean;
+  // Código estable para que el cliente distinga el caso sin parsear el mensaje.
+  public readonly code?: string;
 
   constructor(
     message: string,
     statusCode: number = 500,
     isOperational: boolean = true,
+    code?: string,
   ) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;
+    this.code = code;
 
     Object.setPrototypeOf(this, AppError.prototype);
     Error.captureStackTrace(this, this.constructor);
@@ -35,8 +39,8 @@ export class ForbiddenError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message = "Conflicto con el estado actual") {
-    super(message, 409);
+  constructor(message = "Conflicto con el estado actual", code?: string) {
+    super(message, 409, true, code);
   }
 }
 

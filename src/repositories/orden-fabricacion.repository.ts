@@ -138,40 +138,24 @@ export const ordenFabricacionRepository = {
     return result.rows[0] ?? null;
   },
 
-  // Mismo guard que proponerPrecio: no se puede marcar cierre sobre una orden ya cerrada/cancelada.
-  async marcarCierre(
+  // El comprador acepta el presupuesto vigente del fabricante: cierra el trato en un solo paso.
+  // Guard atómico (estado abierto + mismo precio propuesto): si el fabricante cambió la
+  // propuesta o hubo un cierre concurrente, devuelve null. Ambos flags quedan en true por
+  // consistencia con los datos históricos de doble confirmación.
+  async aceptarPresupuesto(
     id: string,
-    role: "comprador" | "fabricante",
-    precio: number,
+    precioFabricante: string | number,
     db: Db = pool,
   ) {
-    const columnaPrecio =
-      role === "comprador"
-        ? "precio_propuesto_comprador"
-        : "precio_propuesto_fabricante";
-    const columnaCerrado =
-      role === "comprador" ? "cerrado_por_comprador" : "cerrado_por_fabricante";
     const query = `
       UPDATE ordenes_fabricacion
-      SET ${columnaPrecio} = $1, ${columnaCerrado} = true,
-          estado = CASE WHEN estado = 'solicitado' THEN 'en_negociacion' ELSE estado END
-      WHERE id = $2 AND estado IN ('solicitado', 'en_negociacion')
+      SET estado = 'trato_cerrado', precio_acordado = precio_propuesto_fabricante,
+          cerrado_por_comprador = true, cerrado_por_fabricante = true, cerrado_en = now()
+      WHERE id = $1 AND estado IN ('solicitado', 'en_negociacion')
+        AND precio_propuesto_fabricante = $2::numeric
       RETURNING *;
     `;
-    const result = await db.query(query, [precio, id]);
-    return result.rows[0] ?? null;
-  },
-
-  // Guard atomico (WHERE estado IN abiertos): si dos peticiones concurrentes llegan a
-  // cerrar el mismo trato, solo la primera actualiza la fila; la segunda recibe 0 filas.
-  async finalizarTrato(id: string, precioAcordado: number, db: Db = pool) {
-    const query = `
-      UPDATE ordenes_fabricacion
-      SET estado = 'trato_cerrado', precio_acordado = $1, cerrado_en = now()
-      WHERE id = $2 AND estado IN ('solicitado', 'en_negociacion')
-      RETURNING *;
-    `;
-    const result = await db.query(query, [precioAcordado, id]);
+    const result = await db.query(query, [id, precioFabricante]);
     return result.rows[0] ?? null;
   },
 
@@ -237,6 +221,21 @@ export const ordenFabricacionRepository = {
     `;
     const result = await db.query(query, [id]);
     return result.rows[0] ?? null;
+  },
+
+  // Cancelación de la compra por el comprador (sin pago): cancela todas sus órdenes abiertas.
+  async cancelarAbiertasPorCompra(
+    db: Db,
+    compraId: string,
+  ): Promise<{ id: string; fabricante_id: string }[]> {
+    const result = await db.query<{ id: string; fabricante_id: string }>(
+      `UPDATE ordenes_fabricacion
+       SET estado = 'cancelado'
+       WHERE compra_id = $1 AND estado IN ('solicitado', 'en_negociacion', 'trato_cerrado')
+       RETURNING id, fabricante_id;`,
+      [compraId],
+    );
+    return result.rows;
   },
 
   // Reembolso iniciado en MP: la orden en curso deja de ser válida.
@@ -391,9 +390,80 @@ export const ordenFabricacionRepository = {
     return result.rows[0] ?? null;
   },
 
+  // Specs del diseño de una orden para sus participantes. Nunca selecciona archivo_url.
+  async getDisenoDeOrden(ordenId: string) {
+    const query = `
+      SELECT o.id AS orden_id, o.estado, o.fabricante_id,
+             c.id_comprador, c.estado AS compra_estado,
+             mc.nombre AS material_nombre,
+             d.id AS diseno_id, d.titulo, d.descripcion, d.imagen_url,
+             (d.preview_url IS NOT NULL) AS tiene_preview,
+             d.formato, d.peso_gramos, d.especificaciones,
+             cat.nombre AS categoria_nombre,
+             t.nombre AS tecnologia_nombre,
+             COALESCE(
+               (SELECT array_agg(m.nombre ORDER BY m.nombre)
+                FROM diseno_materiales dm
+                JOIN materiales m ON m.id = dm.material_id
+                WHERE dm.diseno_id = d.id),
+               ARRAY[]::text[]
+             ) AS materiales_nombres
+      FROM ordenes_fabricacion o
+      JOIN compras c ON c.id = o.compra_id
+      JOIN disenos d ON d.id = c.id_modelo
+      LEFT JOIN materiales mc ON mc.id = c.material_id
+      LEFT JOIN categorias cat ON cat.id = d.categoria_id
+      LEFT JOIN tecnologias t ON t.id = d.tecnologia_id
+      WHERE o.id = $1;
+    `;
+    const result = await pool.query(query, [ordenId]);
+    return result.rows[0] ?? null;
+  },
+
+  // Dashboard del fabricante: órdenes propias en los estados indicados, más recientes primero
+  // (última transición: cierre, entrega declarada o entrega confirmada). Sin email del comprador.
+  async getCerradasPorFabricante(
+    fabricanteId: string,
+    estados: string[],
+    limit: number,
+    offset: number,
+  ) {
+    const [rows, total] = await Promise.all([
+      pool.query(
+        `SELECT o.id, o.compra_id, o.estado, o.precio_acordado, o.cerrado_en,
+                GREATEST(o.cerrado_en, o.confirmada_en, o.entregado_en) AS actualizado_en,
+                d.id AS diseno_id, d.titulo AS diseno_titulo, d.imagen_url AS diseno_imagen_url,
+                u.username AS comprador_username,
+                m.nombre AS material_nombre,
+                conv.id AS conversacion_id
+         FROM ordenes_fabricacion o
+         JOIN compras c ON c.id = o.compra_id
+         JOIN disenos d ON d.id = c.id_modelo
+         JOIN usuarios u ON u.id = c.id_comprador
+         LEFT JOIN materiales m ON m.id = c.material_id
+         LEFT JOIN conversaciones conv ON conv.orden_fabricacion_id = o.id
+         WHERE o.fabricante_id = $1 AND o.estado = ANY($2::text[])
+         ORDER BY actualizado_en DESC NULLS LAST, o.id
+         LIMIT $3 OFFSET $4;`,
+        [fabricanteId, estados, limit, offset],
+      ),
+      pool.query<{ total: string }>(
+        `SELECT COUNT(*) AS total FROM ordenes_fabricacion o
+         WHERE o.fabricante_id = $1 AND o.estado = ANY($2::text[]);`,
+        [fabricanteId, estados],
+      ),
+    ]);
+    return { rows: rows.rows, total: Number(total.rows[0].total) };
+  },
+
   // Compatible = tiene la tecnología del diseño disponible Y al menos uno de los
   // materiales indicados disponible. Siempre con parámetros: $1 tecnologiaId, $2 materialIds.
   // El comprador se excluye en SQL para que la paginación sea exacta.
+  // Filtro de zonas: OR entre las selecciones (el service ya aplicó refinarZonas); sin
+  // selecciones no filtra. Se evalúan los dos orígenes de ubicación del fabricante: zona_id
+  // (restaurando el cero inicial; localidad de 8 o departamento de 5) y georef_localidad_id
+  // (id Georef de 11 = localidad censal de 8 + 3 dígitos; prov = 2, depto = 5 primeros).
+  // Así un fabricante con zona_id de departamento y georef de localidad matchea en ambos niveles.
   async getFabricantesSugeridos(
     tecnologiaId: number,
     materialIds: number[],
@@ -402,13 +472,41 @@ export const ordenFabricacionRepository = {
     excluirUsuarioId: string,
     limit: number,
     offset: number,
+    zonas: {
+      provincias: string[];
+      departamentos: string[];
+      localidadesCensales: string[];
+      localidadesGeoref: string[];
+    },
   ) {
     const query = `
-      SELECT u.id, u.zona_id, u.puntuacion, u.tagline, u.username
+      SELECT u.id, u.zona_id, u.georef_localidad_id, u.puntuacion, u.tagline, u.username
       FROM usuarios u
+      CROSS JOIN LATERAL (
+        SELECT array_remove(ARRAY[
+          CASE
+            WHEN length(u.zona_id::text) IN (7, 8) THEN lpad(u.zona_id::text, 8, '0')
+            WHEN length(u.zona_id::text) IN (4, 5) THEN lpad(u.zona_id::text, 5, '0')
+          END,
+          CASE
+            WHEN u.georef_localidad_id ~ '^[0-9]{8}([0-9]{3})?$' THEN left(u.georef_localidad_id, 8)
+          END
+        ], NULL) AS codigos
+      ) z
       WHERE u.rol_principal = 'fabricante'
         AND u.id <> $5::uuid
         AND ${FABRICANTE_COMPATIBLE_SQL}
+        AND (
+          cardinality($8::text[]) + cardinality($9::text[])
+            + cardinality($10::text[]) + cardinality($11::text[]) = 0
+          OR EXISTS (
+            SELECT 1 FROM unnest(z.codigos) AS zc(codigo)
+            WHERE left(zc.codigo, 2) = ANY($8::text[])
+              OR (length(zc.codigo) >= 5 AND left(zc.codigo, 5) = ANY($9::text[]))
+              OR (length(zc.codigo) = 8 AND zc.codigo = ANY($10::text[]))
+          )
+          OR u.georef_localidad_id = ANY($11::text[])
+        )
       ORDER BY
         CASE
           WHEN $3::int IS NOT NULL AND u.zona_id = $3 THEN 0
@@ -431,6 +529,10 @@ export const ordenFabricacionRepository = {
       excluirUsuarioId,
       limit,
       offset,
+      zonas.provincias,
+      zonas.departamentos,
+      zonas.localidadesCensales,
+      zonas.localidadesGeoref,
     ]);
     return result.rows;
   },

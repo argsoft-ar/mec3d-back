@@ -3,6 +3,8 @@ import { CATALOGO_SEED_SQL } from "./catalogo.seed";
 import { guardOrExit } from "./guard";
 import {
   CATEGORIAS_NOMBRE_LOWER_INDEX_SQL,
+  COMPRA_DESCARGA_ACTIVA_INDEX_SQL,
+  CONVERSACION_LECTURAS_SQL,
   LEDGER_TRIGGER_SQL,
   PREVIEW_URL_CHECK_SQL,
   SCHEMA_MIGRATIONS_DDL,
@@ -19,6 +21,7 @@ export const RESET_SQL = `
   DROP TABLE IF EXISTS webhook_eventos CASCADE;
   DROP TABLE IF EXISTS movimientos CASCADE;
   DROP TABLE IF EXISTS pagos CASCADE;
+  DROP TABLE IF EXISTS conversacion_lecturas CASCADE;
   DROP TABLE IF EXISTS mensajes CASCADE;
   DROP TABLE IF EXISTS conversaciones CASCADE;
   DROP TABLE IF EXISTS ordenes_fabricacion CASCADE;
@@ -142,6 +145,8 @@ export const SCHEMA_SQL = `
     preview_url TEXT NULL,
     imagen_url TEXT,
     precio_base DECIMAL(10,2) NOT NULL,
+    -- Obligatorio en la API; NULL solo en diseños anteriores a la migración 8.
+    peso_gramos INTEGER NULL,
     rating DECIMAL(3,2) DEFAULT 0.00,
     review_count INTEGER DEFAULT 0,
     descargas INTEGER DEFAULT 0,
@@ -155,7 +160,8 @@ export const SCHEMA_SQL = `
     CONSTRAINT fk_disenador FOREIGN KEY (disenador_id) REFERENCES usuarios(id) ON DELETE CASCADE,
     CONSTRAINT fk_categoria FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL,
     CONSTRAINT fk_diseno_tecnologia FOREIGN KEY (tecnologia_id) REFERENCES tecnologias(id),
-    CONSTRAINT chk_diseno_preview_key CHECK (${PREVIEW_URL_CHECK_SQL})
+    CONSTRAINT chk_diseno_preview_key CHECK (${PREVIEW_URL_CHECK_SQL}),
+    CONSTRAINT chk_diseno_peso_gramos CHECK (peso_gramos IS NULL OR peso_gramos > 0)
   );
   CREATE INDEX idx_disenos_disenador ON disenos (disenador_id);
   CREATE INDEX idx_disenos_categoria ON disenos (categoria_id);
@@ -213,6 +219,7 @@ export const SCHEMA_SQL = `
   CREATE INDEX idx_compras_disenador ON compras (id_disenador);
   CREATE INDEX idx_compras_material ON compras (material_id);
   CREATE INDEX idx_compras_estado ON compras (estado);
+  ${COMPRA_DESCARGA_ACTIVA_INDEX_SQL}
 
   -- ── Órdenes de fabricación ─────────────────────────────────────────────────
   -- Una fila por fabricante contactado para una misma compra.
@@ -308,6 +315,8 @@ export const SCHEMA_SQL = `
   );
   CREATE INDEX idx_mensajes_conversacion ON mensajes (conversacion_id, creado_en);
   CREATE INDEX idx_mensajes_remitente ON mensajes (remitente_id);
+
+  ${CONVERSACION_LECTURAS_SQL}
 
   -- ── Pagos y ledger ─────────────────────────────────────────────────────────
   -- Comisiones en basis points (1000 = 10%). Se leen al aprobarse cada pago.
@@ -445,8 +454,10 @@ export const REFERENCE_DATA_SQL = `
     ('Casa', 'Herrajes, cerraduras y más'),
     ('Maquinas', 'Piezas industriales y de producción'),
     ('Engranajes', 'Transmisiones, poleas y sistemas mecánicos'),
-    ('Planos técnicos', 'Planos técnicos en PDF, DWG o DXF (solo descarga, sin fabricación)')
-  ON CONFLICT (nombre) DO NOTHING;
+    ('Planos técnicos', 'Planos técnicos en PDF, DWG o DXF (solo descarga, sin fabricación)'),
+    ('Envases', 'Envases, frascos, tapas y contenedores'),
+    ('Piezas varias', 'Piezas y componentes de uso general')
+  ON CONFLICT DO NOTHING;
 
   INSERT INTO configuracion_comisiones (clave, valor_bps, descripcion) VALUES
     ('plataforma', 1000, 'Comisión de la plataforma sobre cada cobro (compra de diseño o fabricación), en basis points'),

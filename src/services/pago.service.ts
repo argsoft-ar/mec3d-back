@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { PoolClient } from "pg";
 import { getMercadoPagoSettings } from "../config/env.config";
-import { getMercadoPagoClients } from "../config/mercadopago.config";
+import {
+  getMercadoPagoClients,
+  MercadoPagoClients,
+} from "../config/mercadopago.config";
 import {
   CompraRow,
   EstadoPagoResponse,
@@ -91,6 +94,10 @@ interface ResultadoAplicacion {
   reembolsar: string[];
   liberados: MovimientoRow[];
 }
+
+type PreferenceUpdateRequest = Parameters<
+  MercadoPagoClients["preference"]["update"]
+>[0]["updatePreferenceRequest"];
 
 // Re-consulta el pago a MP (se usa dentro del lock del pago para no actuar sobre un estado viejo).
 type Refetch = () => Promise<MpPayment>;
@@ -861,9 +868,32 @@ export const pagoService = {
     return { httpStatus: 503, resultado: "reintentable" };
   },
 
-  // Compras 'pendiente_pago' con preference reciente: se consulta a MP por external_reference
-  // (por si se perdió el webhook) y se acreditan los pagos aprobados con la misma función
-  // transaccional que usa el webhook (aplicarPagoMp). Idempotente.
+  // Best-effort tras cancelar una compra: vence las preferences en MP para que no se puedan pagar.
+  // Nunca lanza; un cobro que igual entre se reembolsa vía webhook/reconciliación.
+  async expirarPreferences(preferenceIds: string[]): Promise<void> {
+    for (const id of preferenceIds) {
+      try {
+        await getMercadoPagoClients().preference.update({
+          id,
+          // El PUT de MP acepta updates parciales; el tipo del SDK exige `items` igual.
+          updatePreferenceRequest: {
+            expires: true,
+            expiration_date_to: new Date().toISOString(),
+          } as PreferenceUpdateRequest,
+        });
+      } catch (error) {
+        console.error(
+          `❌ No se pudo expirar la preference ${id} de Mercado Pago:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+  },
+
+  // Compras 'pendiente_pago' (o canceladas con un intento rechazado) con preference reciente: se
+  // consulta a MP por external_reference (por si se perdió el webhook) y se aplican los pagos
+  // aprobados con la misma función transaccional que usa el webhook (aplicarPagoMp); en una
+  // compra cancelada eso los reembolsa sin tocar el ledger. Idempotente.
   async reconciliarPagosPendientes(
     limite = 50,
   ): Promise<ResumenReconciliacion> {

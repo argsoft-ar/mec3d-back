@@ -9,12 +9,15 @@ import {
   confirmarEntregaOrden,
   getMisSolicitudesFabricacion,
   descargarDiseno,
+  getDisenoOrden,
+  getOrdenesCerradasFabricante,
   cancelarOrden,
   disputarOrden,
 } from "../controllers/orden-fabricacion.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { validateSchema } from "../middlewares/validate.middleware";
 import { uuidParamSchema } from "../schemas/common.schema";
+import { paginationSchema } from "../schemas/pagination.schema";
 import {
   crearOrdenesFabricacionSchema,
   fabricantesSugeridosSchema,
@@ -45,6 +48,14 @@ router.get(
 // Listado de solicitudes recibidas por el fabricante autenticado ("Mis solicitudes")
 router.get("/mis-solicitudes", authenticateToken, getMisSolicitudesFabricacion);
 
+// Dashboard del fabricante: órdenes con trato cerrado, confirmadas o completadas (paginado).
+router.get(
+  "/fabricante/cerradas",
+  authenticateToken,
+  validateSchema(paginationSchema),
+  getOrdenesCerradasFabricante,
+);
+
 // Solicitar cotización a uno o más fabricantes para una compra
 router.post(
   "/",
@@ -62,6 +73,7 @@ router.post(
   proponerPrecio,
 );
 
+// Solo el comprador: acepta el presupuesto vigente del fabricante y cierra el trato.
 router.post(
   "/:id/cerrar-trato",
   authenticateToken,
@@ -120,6 +132,14 @@ router.post(
   pagoLimiter,
   validateSchema(uuidParamSchema),
   cancelarOrden,
+);
+
+// Specs del diseño (sin archivoUrl) para comprador o fabricante de la orden.
+router.get(
+  "/:id/diseno",
+  authenticateToken,
+  validateSchema(uuidParamSchema),
+  getDisenoOrden,
 );
 
 // Descarga del archivo de diseño habilitada al fabricante mientras el trato esté

@@ -1,8 +1,12 @@
 import { compraRepository } from "../repositories/compra.repository";
 import { disenoRepository } from "../repositories/diseno.repository";
+import { ordenFabricacionRepository } from "../repositories/orden-fabricacion.repository";
+import { pagoRepository } from "../repositories/pago.repository";
 import {
+  CancelarCompraResultado,
   Compra,
   CrearCompraResultado,
+  EstadoCompraDescarga,
   MisComprasItem,
 } from "../interfaces/compra.interface";
 import { CompraRow, TipoCompra } from "../interfaces/pago.interface";
@@ -25,11 +29,24 @@ import {
 import { catalogoService } from "./catalogo.service";
 import { pagoService } from "./pago.service";
 import { archivoService } from "./archivo.service";
+import { emitirMensajeSistema } from "./orden-fabricacion.service";
 
 type CompraConMaterial = Partial<CompraRow> &
   Pick<CompraRow, "id" | "id_comprador" | "id_modelo" | "id_disenador"> & {
     material_nombre?: string | null;
   };
+
+export const CODIGO_COMPRA_DUPLICADA = "COMPRA_DUPLICADA";
+const MSG_COMPRA_DUPLICADA = "Ya compraste este diseño";
+export const CODIGO_COMPRA_NO_CANCELABLE = "COMPRA_NO_CANCELABLE";
+
+function esCompraCobrada(estado: CompraRow["estado"] | undefined): boolean {
+  return estado === "pagada" || estado === "completada";
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === "23505";
+}
 
 function mapCompra(row: CompraConMaterial): Compra {
   const monto =
@@ -57,7 +74,8 @@ function mapCompra(row: CompraConMaterial): Compra {
 }
 
 export const compraService = {
-  // descarga: crea la compra 'pendiente_pago' y la preference de Checkout Pro.
+  // descarga: crea la compra 'pendiente_pago' y la preference de Checkout Pro; si ya hay una
+  // descarga pendiente del mismo comprador y diseño la reutiliza, y si ya está cobrada responde 409.
   // fabricacion: solo crea el ancla; el pago se inicia al cerrarse el trato
   // (POST /compras/:id/pagar) con el precio final negociado.
   async crear(
@@ -82,6 +100,45 @@ export const compraService = {
           throw new ConflictError("No podés comprar tu propio diseño");
         }
 
+        if (tipo === "descarga") {
+          await compraRepository.lockCompraDescarga(
+            client,
+            compradorId,
+            diseno.id,
+          );
+          const existente = await compraRepository.getCompraDescargaExistente(
+            compradorId,
+            diseno.id,
+            client,
+          );
+          if (existente && esCompraCobrada(existente.estado)) {
+            throw new ConflictError(
+              MSG_COMPRA_DUPLICADA,
+              CODIGO_COMPRA_DUPLICADA,
+            );
+          }
+          if (existente) {
+            // El precio lo fija el diseño actual, no el de cuando se creó la pendiente.
+            const montoActual = pesosACentavos(diseno.precio_base);
+            if (
+              existente.monto_centavos === null ||
+              toCentavos(existente.monto_centavos) !== montoActual
+            ) {
+              const actualizada =
+                await compraRepository.setMontoDescargaPendiente(
+                  client,
+                  existente.id,
+                  montoActual,
+                );
+              if (!actualizada) {
+                throw new ConflictError("La compra no está pendiente de pago");
+              }
+              return { compra: actualizada, materialElegido: null };
+            }
+            return { compra: existente, materialElegido: null };
+          }
+        }
+
         if (
           tipo === "fabricacion" &&
           esCategoriaPlano(diseno.categoria_nombre)
@@ -96,18 +153,29 @@ export const compraService = {
             )
           : null;
 
-        const creada = await compraRepository.create(
-          {
-            idComprador: compradorId,
-            idModelo: diseno.id,
-            idDisenador: diseno.disenador_id,
-            tipo,
-            montoCentavos:
-              tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
-            materialId: material?.id ?? null,
-          },
-          client,
-        );
+        const creada = await compraRepository
+          .create(
+            {
+              idComprador: compradorId,
+              idModelo: diseno.id,
+              idDisenador: diseno.disenador_id,
+              tipo,
+              montoCentavos:
+                tipo === "descarga" ? pesosACentavos(diseno.precio_base) : null,
+              materialId: material?.id ?? null,
+            },
+            client,
+          )
+          .catch((error: unknown) => {
+            // Respaldo de uq_compra_descarga_activa si el lock no lo cubrió.
+            if (tipo === "descarga" && isUniqueViolation(error)) {
+              throw new ConflictError(
+                MSG_COMPRA_DUPLICADA,
+                CODIGO_COMPRA_DUPLICADA,
+              );
+            }
+            throw error;
+          });
         return { compra: creada, materialElegido: material };
       },
     );
@@ -119,13 +187,103 @@ export const compraService = {
     if (tipo === "fabricacion") {
       return { compra: mapped, initPoint: null };
     }
-    const { initPoint } = await pagoService.iniciarPago(compra.id, compradorId);
+    // Compra nueva o pendiente reutilizada: mismo flujo que POST /compras/:id/pagar.
+    const { initPoint } = await this.pagar(compra.id, compradorId);
     return { compra: mapped, initPoint };
+  },
+
+  // Estado de la descarga del comprador sobre un diseño (solo compras activas).
+  async estadoDescarga(
+    disenoId: string,
+    compradorId: string,
+  ): Promise<EstadoCompraDescarga> {
+    const compra = await compraRepository.getCompraDescargaExistente(
+      compradorId,
+      disenoId,
+    );
+    return {
+      comprado: esCompraCobrada(compra?.estado),
+      compraId: compra?.id ?? null,
+      estado: compra?.estado ?? null,
+    };
   },
 
   // Reintento de pago (preference vencida o abandonada) de una compra 'pendiente_pago'.
   async pagar(compraId: string, compradorId: string) {
     return pagoService.iniciarPago(compraId, compradorId);
+  },
+
+  // El comprador abandona una compra sin pagar. Locks compra -> órdenes -> pagos. Los intentos
+  // pendientes quedan rechazados: un cobro tardío de MP se reembolsa ('compra_cancelada').
+  async cancelar(
+    compraId: string,
+    compradorId: string,
+  ): Promise<CancelarCompraResultado> {
+    const cancelada = await withTransaction(async (client) => {
+      const compra = await compraRepository.lockById(client, compraId);
+      if (!compra) {
+        throw new NotFoundError("Compra no encontrada");
+      }
+      if (compra.id_comprador !== compradorId) {
+        throw new ForbiddenError("No autorizado para cancelar esta compra");
+      }
+      if (compra.estado !== "pendiente_pago") {
+        throw new ConflictError(
+          "La compra ya no puede cancelarse",
+          CODIGO_COMPRA_NO_CANCELABLE,
+        );
+      }
+
+      const ordenes =
+        compra.tipo === "fabricacion"
+          ? await ordenFabricacionRepository.cancelarAbiertasPorCompra(
+              client,
+              compra.id,
+            )
+          : [];
+
+      const pagos = await pagoRepository.lockPorCompra(client, compra.id);
+      if (pagos.some((p) => p.estado === "aprobado")) {
+        throw new ConflictError(
+          "La compra tiene un pago acreditado y no puede cancelarse",
+          CODIGO_COMPRA_NO_CANCELABLE,
+        );
+      }
+      await pagoRepository.rechazarPendientesPorCompra(client, compra.id);
+
+      if (!(await compraRepository.cancelar(client, compra.id))) {
+        throw new ConflictError(
+          "La compra ya no puede cancelarse",
+          CODIGO_COMPRA_NO_CANCELABLE,
+        );
+      }
+      return {
+        ordenesCanceladas: ordenes,
+        preferenceIds: pagos
+          .map((p) => p.mp_preference_id)
+          .filter((id): id is string => !!id),
+      };
+    });
+    const { ordenesCanceladas, preferenceIds } = cancelada;
+
+    try {
+      await pagoService.expirarPreferences(preferenceIds);
+    } catch (error) {
+      console.error(
+        `❌ No se pudieron expirar las preferences de la compra ${compraId}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+
+    for (const orden of ordenesCanceladas) {
+      await emitirMensajeSistema(
+        orden.id,
+        "El comprador canceló la solicitud de fabricación",
+        "orden-cancelada",
+      );
+    }
+
+    return { compraId, estado: "cancelada" };
   },
 
   async misCompras(compradorId: string): Promise<MisComprasItem[]> {

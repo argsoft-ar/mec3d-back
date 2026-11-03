@@ -1,5 +1,13 @@
 import pool from "../config/db.config";
 import { Db } from "../utils/transaction.util";
+import { MensajeCreadoRow, TipoMensaje } from "../interfaces/chat.interface";
+
+// No leído = posterior a la última lectura (o todos si nunca leyó) y no enviado por el usuario.
+// Los mensajes de sistema (remitente_id NULL) cuentan para ambos participantes.
+const CONDICION_NO_LEIDO = `
+  m.remitente_id IS DISTINCT FROM $1
+  AND (l.ultima_lectura_en IS NULL OR m.creado_en > l.ultima_lectura_en)
+`;
 
 export const chatRepository = {
   async createConversacion(
@@ -50,24 +58,69 @@ export const chatRepository = {
     return (result.rowCount ?? 0) > 0;
   },
 
-  async crearMensaje(data: {
-    conversacionId: string;
-    remitenteId: string | null;
-    contenido: string;
-    tipo: "texto" | "sistema" | "propuesta_precio";
-  }) {
+  // Único punto de alta de mensajes: marca la conversación como leída para el remitente y
+  // devuelve participantes + username del remitente para notificar sin otra consulta.
+  async crearMensaje(
+    data: {
+      conversacionId: string;
+      remitenteId: string | null;
+      contenido: string;
+      tipo: TipoMensaje;
+    },
+    db: Db = pool,
+  ): Promise<MensajeCreadoRow> {
     const query = `
-      INSERT INTO mensajes (conversacion_id, remitente_id, contenido, tipo)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, conversacion_id, remitente_id, contenido, tipo, creado_en;
+      WITH nuevo AS (
+        INSERT INTO mensajes (conversacion_id, remitente_id, contenido, tipo)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, conversacion_id, remitente_id, contenido, tipo, creado_en
+      ), lectura AS (
+        INSERT INTO conversacion_lecturas (conversacion_id, usuario_id, ultima_lectura_en)
+        SELECT conversacion_id, remitente_id, now() FROM nuevo WHERE remitente_id IS NOT NULL
+        ON CONFLICT (conversacion_id, usuario_id) DO UPDATE
+          SET ultima_lectura_en = GREATEST(conversacion_lecturas.ultima_lectura_en, EXCLUDED.ultima_lectura_en)
+      )
+      SELECT n.id, n.conversacion_id, n.remitente_id, n.contenido, n.tipo, n.creado_en,
+             c.comprador_id, c.fabricante_id, u.username AS remitente_username
+      FROM nuevo n
+      JOIN conversaciones c ON c.id = n.conversacion_id
+      LEFT JOIN usuarios u ON u.id = n.remitente_id;
     `;
-    const result = await pool.query(query, [
+    const result = await db.query(query, [
       data.conversacionId,
       data.remitenteId,
       data.contenido,
       data.tipo,
     ]);
     return result.rows[0];
+  },
+
+  async marcarLeida(
+    conversacionId: string,
+    userId: string,
+    db: Db = pool,
+  ): Promise<void> {
+    const query = `
+      INSERT INTO conversacion_lecturas (conversacion_id, usuario_id, ultima_lectura_en)
+      VALUES ($1, $2, now())
+      ON CONFLICT (conversacion_id, usuario_id) DO UPDATE
+        SET ultima_lectura_en = GREATEST(conversacion_lecturas.ultima_lectura_en, EXCLUDED.ultima_lectura_en);
+    `;
+    await db.query(query, [conversacionId, userId]);
+  },
+
+  async contarNoLeidosTotal(userId: string): Promise<number> {
+    const query = `
+      SELECT COUNT(*)::int AS total
+      FROM conversaciones c
+      JOIN mensajes m ON m.conversacion_id = c.id
+      LEFT JOIN conversacion_lecturas l
+        ON l.conversacion_id = c.id AND l.usuario_id = $1
+      WHERE (c.comprador_id = $1 OR c.fabricante_id = $1)
+        AND ${CONDICION_NO_LEIDO};
+    `;
+    const result = await pool.query(query, [userId]);
+    return Number(result.rows[0]?.total ?? 0);
   },
 
   async getMensajesPaginated(
@@ -98,7 +151,8 @@ export const chatRepository = {
         fabricante.username AS fabricante_username, fabricante.tagline AS fabricante_tagline,
         o.estado AS orden_estado, o.precio_acordado, o.precio_propuesto_comprador, o.precio_propuesto_fabricante,
         d.titulo AS producto_titulo,
-        ultimo.contenido AS ultimo_mensaje_contenido, ultimo.creado_en AS ultimo_mensaje_creado_en
+        ultimo.contenido AS ultimo_mensaje_contenido, ultimo.creado_en AS ultimo_mensaje_creado_en,
+        no_leidos.total AS no_leidos
       FROM conversaciones c
       JOIN ordenes_fabricacion o ON o.id = c.orden_fabricacion_id
       JOIN compras cm ON cm.id = o.compra_id
@@ -111,6 +165,12 @@ export const chatRepository = {
         ORDER BY creado_en DESC
         LIMIT 1
       ) ultimo ON true
+      LEFT JOIN conversacion_lecturas l
+        ON l.conversacion_id = c.id AND l.usuario_id = $1
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS total FROM mensajes m
+        WHERE m.conversacion_id = c.id AND ${CONDICION_NO_LEIDO}
+      ) no_leidos ON true
       WHERE c.comprador_id = $1 OR c.fabricante_id = $1
       ORDER BY COALESCE(ultimo.creado_en, c.creado_en) DESC;
     `;

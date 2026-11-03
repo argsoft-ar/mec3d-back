@@ -47,6 +47,24 @@ export const pagarCompra = async (
   }
 };
 
+export const cancelarCompra = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const compradorId = req.user?.id;
+    if (!compradorId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+    const data = await compraService.cancelar(req.params.id, compradorId);
+    res.status(200).json({ message: "Compra cancelada", data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getEstadoPago = async (
   req: Request,
   res: Response,
@@ -61,6 +79,27 @@ export const getEstadoPago = async (
     res
       .status(200)
       .json(await pagoService.getEstadoPago(req.params.id, userId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getEstadoCompraDiseno = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const compradorId = req.user?.id;
+    if (!compradorId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+    res
+      .status(200)
+      .json(
+        await compraService.estadoDescarga(req.params.disenoId, compradorId),
+      );
   } catch (error) {
     next(error);
   }

@@ -28,6 +28,7 @@ const filaPlano = {
   review_count: "0",
   descargas: "0",
   precio_base: "100",
+  peso_gramos: 35,
   formato: "PDF",
   especificaciones: null,
   designer_id: "3f2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f",
@@ -52,6 +53,7 @@ describe("GET /api/v1/productos/:id", () => {
     expect(res.body).toMatchObject({
       id: ID,
       title: "Plano",
+      pesoGramos: 35,
       categoria: "Planos técnicos",
       tecnologia: null,
       materiales: [],
