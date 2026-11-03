@@ -28,4 +28,7 @@ const run = async () => {
   if (failed) process.exit(1);
 };
 
-run();
+run().catch((err) => {
+  console.error("❌ Error inesperado en el backfill de previews:", err);
+  process.exit(1);
+});

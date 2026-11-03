@@ -7,6 +7,7 @@ import { mapMensaje, chatService } from "../services/chat.service";
 import { setIO } from "./io.instance";
 import { notificarMensaje, salaUsuario } from "./notificaciones";
 import { TokenPayload } from "../interfaces/auth.interface";
+import { quitarBarrasFinales } from "../utils/url.util";
 
 // Ventana deslizante en memoria para limitar mensajes por usuario: express-rate-limit
 // no aplica a WebSockets, así que se replica la misma idea de forma equivalente a chatLimiter.
@@ -85,7 +86,7 @@ function purgarPeriodicamente(): void {
 export function initChatSocket(httpServer: HttpServer): Server {
   const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
     .split(",")
-    .map((o) => o.trim().replace(/\/+$/, ""));
+    .map((o) => quitarBarrasFinales(o.trim()));
 
   const io = new Server(httpServer, {
     cors: {

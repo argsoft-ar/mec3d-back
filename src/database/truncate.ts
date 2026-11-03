@@ -35,4 +35,7 @@ const truncateTables = async () => {
   if (failed) process.exit(1);
 };
 
-truncateTables();
+truncateTables().catch((err) => {
+  console.error("❌ Error inesperado en db:truncate:", err);
+  process.exit(1);
+});

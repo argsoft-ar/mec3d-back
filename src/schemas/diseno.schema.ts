@@ -6,6 +6,7 @@ import {
   MSG_FORMATO_PLANO,
   validarArchivoSegunCategoria,
 } from "../utils/plano.util";
+import { quitarBarrasFinales } from "../utils/url.util";
 
 export type AssetKind = "archivo" | "imagen";
 
@@ -74,7 +75,7 @@ export function isAllowedAssetUrl(
   if (kind === "archivo") {
     const r2 = env.R2_PUBLIC_URL ? parseUrl(env.R2_PUBLIC_URL) : null;
     if (!r2 || url.origin !== r2.origin) return false;
-    const basePath = r2.pathname.replace(/\/+$/, "");
+    const basePath = quitarBarrasFinales(r2.pathname);
     return url.pathname.startsWith(`${basePath}${R2_MODELOS_PREFIX}`);
   }
 

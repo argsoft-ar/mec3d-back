@@ -490,5 +490,8 @@ const initDatabase = async () => {
 };
 
 if (require.main === module) {
-  void initDatabase();
+  initDatabase().catch((err) => {
+    console.error("❌ Error inesperado en db:init:", err);
+    process.exit(1);
+  });
 }

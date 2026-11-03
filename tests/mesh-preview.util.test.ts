@@ -3,6 +3,7 @@ import {
   PREVIEW_MAX_GRID,
   PREVIEW_MAX_TRIANGLES,
   generarPreviewStl,
+  leerAtributos,
   parse3mf,
   parseObj,
   parseStl,
@@ -463,5 +464,55 @@ describe("parse3mf", () => {
       `<vertex x="0" y="0" z="0" ${'a="1" '.repeat(200)}/>`,
     );
     expect(() => parse3mf(zip3mf(xml))).toThrow(/etiqueta demasiado larga/);
+  });
+
+  it("acepta espacios alrededor del '=' en un 3MF", () => {
+    const v = `<vertex x = "0" y\t=\n'0' z= "0"/>`;
+    expect(parse3mf(zip3mf(modelo3mf(v))).vertices.length / 3).toBe(3);
+  });
+});
+
+describe("leerAtributos", () => {
+  // Regex original: referencia para verificar que el parser lineal da los mismos pares.
+  const referencia = (tag: string): [string, string][] =>
+    Array.from(
+      tag.matchAll(/([A-Za-z_][\w.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g),
+      (m) => [m[1], m[2] ?? m[3]] as [string, string],
+    );
+
+  it("lee comillas dobles y simples, y espacios alrededor del '='", () => {
+    expect(leerAtributos(` x="1" y='2' z = "3" w\t=\t'4' v=""`)).toEqual([
+      ["x", "1"],
+      ["y", "2"],
+      ["z", "3"],
+      ["w", "4"],
+      ["v", ""],
+    ]);
+  });
+
+  it.each([
+    ` x="1" y="2" z="3"/`,
+    ` p:id="a" data-x.y='b "c"' _k="d 'e'"`,
+    ` 9x="1" -y="2" foo bar="3"`,
+    ` a = 1 b="2" c=`,
+    ` x="abierta y='1'`,
+    ` x='abierta y="1"`,
+    ` a=="1" b= ="2" c="3"`,
+    ` x="1"y="2"`,
+    ` \u00a0x\u00a0=\u00a0"1"`,
+  ])("coincide con la regex original para %j", (tag) => {
+    expect(leerAtributos(tag)).toEqual(referencia(tag));
+  });
+
+  it.each([
+    `${"a".repeat(50_000)}=`,
+    `${"a".repeat(50_000)} `,
+    `${"a".repeat(50_000)}="`,
+    'a="'.repeat(25_000),
+    `${"a ='".repeat(25_000)}`,
+  ])("entrada patológica de %#: termina en tiempo lineal", (tag) => {
+    const inicio = Date.now();
+    leerAtributos(tag);
+    expect(Date.now() - inicio).toBeLessThan(1000);
   });
 });
