@@ -1,4 +1,17 @@
+import { quitarBarrasFinales } from "./url.util";
+
 const HOSTS_LOCALES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+// Allowlist de orígenes del front (CORS_ORIGIN, separados por coma). Con credentials el
+// comodín '*' no es válido, así que se descarta.
+export function parseAllowedOrigins(
+  raw: string | undefined = process.env.CORS_ORIGIN,
+): string[] {
+  return (raw || "http://localhost:5173")
+    .split(",")
+    .map((o) => quitarBarrasFinales(o.trim()))
+    .filter((o) => o.length > 0 && o !== "*");
+}
 
 // En producción el CORS del bucket no admite '*', http:// ni orígenes locales; lanza ante cualquiera.
 export function validarOrigenesCorsProduccion(

@@ -33,10 +33,12 @@ const options: swaggerJsdoc.Options = {
     ],
     components: {
       securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT",
+        // Sesión en cookie HttpOnly emitida por /auth/login, /auth/registro y PATCH /usuarios/rol.
+        // Las requests que modifican estado además exigen un Origin permitido (CSRF).
+        cookieAuth: {
+          type: "apiKey",
+          in: "cookie",
+          name: "mec3d_session",
         },
       },
       schemas: {

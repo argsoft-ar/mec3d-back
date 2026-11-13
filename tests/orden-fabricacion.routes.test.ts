@@ -7,6 +7,7 @@ jest.mock("../src/repositories/user.repository", () => ({
 
 import request from "supertest";
 import app from "../src/app";
+import { ORIGIN } from "./helpers/session";
 import { generateToken } from "../src/utils/jwt.util";
 import { ordenFabricacionRepository } from "../src/repositories/orden-fabricacion.repository";
 import { ordenFabricacionService } from "../src/services/orden-fabricacion.service";
@@ -26,7 +27,7 @@ const FABRICANTE = "6d2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f";
 const AJENO = "7e2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f";
 
 const auth = (id: string, rol: "comprador" | "fabricante" = "comprador") =>
-  `Bearer ${generateToken({ id, email: "x@mec3d.com", rolPrincipal: rol })}`;
+  `mec3d_session=${generateToken({ id, email: "x@mec3d.com", rolPrincipal: rol })}`;
 
 const BASE = "/api/v1/ordenes-fabricacion";
 
@@ -70,7 +71,8 @@ describe("GET /ordenes-fabricacion/:id/diseno", () => {
         .mockResolvedValue(filaDiseno());
       const res = await request(app)
         .get(`${BASE}/${ORDEN_ID}/diseno`)
-        .set("Authorization", auth(userId));
+        .set("Origin", ORIGIN)
+        .set("Cookie", auth(userId));
       expect(res.status).toBe(200);
       expect(res.body.data).toMatchObject({
         ordenId: ORDEN_ID,
@@ -88,7 +90,8 @@ describe("GET /ordenes-fabricacion/:id/diseno", () => {
       .mockResolvedValue(filaDiseno());
     const res = await request(app)
       .get(`${BASE}/${ORDEN_ID}/diseno`)
-      .set("Authorization", auth(AJENO));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(AJENO));
     expect(res.status).toBe(403);
     expect(res.body).not.toHaveProperty("data");
   });
@@ -99,7 +102,8 @@ describe("GET /ordenes-fabricacion/:id/diseno", () => {
       .mockResolvedValue(filaDiseno({ estado: "en_negociacion" }));
     const antes = await request(app)
       .get(`${BASE}/${ORDEN_ID}/diseno`)
-      .set("Authorization", auth(FABRICANTE, "fabricante"));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE, "fabricante"));
     expect(antes.body.data.puedeDescargar).toBe(false);
 
     spy.mockResolvedValue(
@@ -107,7 +111,8 @@ describe("GET /ordenes-fabricacion/:id/diseno", () => {
     );
     const despues = await request(app)
       .get(`${BASE}/${ORDEN_ID}/diseno`)
-      .set("Authorization", auth(FABRICANTE, "fabricante"));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE, "fabricante"));
     expect(despues.body.data.puedeDescargar).toBe(true);
   });
 
@@ -119,7 +124,8 @@ describe("GET /ordenes-fabricacion/:id/diseno", () => {
       (
         await request(app)
           .get(`${BASE}/no-uuid/diseno`)
-          .set("Authorization", auth(COMPRADOR))
+          .set("Origin", ORIGIN)
+          .set("Cookie", auth(COMPRADOR))
       ).status,
     ).toBe(400);
   });
@@ -141,7 +147,8 @@ describe("GET /ordenes-fabricacion/:id/descargar-diseno", () => {
     const firmar = jest.spyOn(archivoService, "firmarUrl");
     const res = await request(app)
       .get(`${BASE}/${ORDEN_ID}/descargar-diseno`)
-      .set("Authorization", auth(FABRICANTE, "fabricante"));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE, "fabricante"));
     expect(res.status).toBe(409);
     expect(firmar).not.toHaveBeenCalled();
   });
@@ -152,7 +159,8 @@ describe("GET /ordenes-fabricacion/:id/descargar-diseno", () => {
       .mockResolvedValue(fila());
     const res = await request(app)
       .get(`${BASE}/${ORDEN_ID}/descargar-diseno`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(403);
   });
 
@@ -166,7 +174,8 @@ describe("GET /ordenes-fabricacion/:id/descargar-diseno", () => {
     });
     const res = await request(app)
       .get(`${BASE}/${ORDEN_ID}/descargar-diseno`)
-      .set("Authorization", auth(FABRICANTE, "fabricante"));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE, "fabricante"));
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("https://signed.example/a.stl");
     expect(res.headers["cache-control"]).toBe("no-store");
@@ -185,7 +194,8 @@ describe("GET /ordenes-fabricacion/fabricante/cerradas", () => {
     );
     const res = await request(app)
       .get(`${BASE}/fabricante/cerradas`)
-      .set("Authorization", auth(COMPRADOR, "fabricante"));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR, "fabricante"));
     expect(res.status).toBe(403);
     expect(repo).not.toHaveBeenCalled();
   });
@@ -200,7 +210,8 @@ describe("GET /ordenes-fabricacion/fabricante/cerradas", () => {
       .mockResolvedValue({ rows: [], total: 0 });
     const res = await request(app)
       .get(`${BASE}/fabricante/cerradas?page=2&limit=5`)
-      .set("Authorization", auth(FABRICANTE, "fabricante"));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE, "fabricante"));
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       data: [],
@@ -217,7 +228,8 @@ describe("GET /ordenes-fabricacion/fabricante/cerradas", () => {
   it("valida la paginación", async () => {
     const res = await request(app)
       .get(`${BASE}/fabricante/cerradas?limit=0`)
-      .set("Authorization", auth(FABRICANTE, "fabricante"));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE, "fabricante"));
     expect(res.status).toBe(400);
   });
 });
@@ -234,7 +246,8 @@ describe("POST /ordenes-fabricacion/:id/cerrar-trato", () => {
     const lock = jest.spyOn(ordenFabricacionRepository, "lockById");
     const res = await request(app)
       .post(`${BASE}/${ORDEN_ID}/cerrar-trato`)
-      .set("Authorization", auth(FABRICANTE, "fabricante"))
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE, "fabricante"))
       .send({ precio: 1500 });
     expect(res.status).toBe(403);
     expect(res.body.error).toBe(
@@ -246,7 +259,8 @@ describe("POST /ordenes-fabricacion/:id/cerrar-trato", () => {
   it("valida el precio", async () => {
     const res = await request(app)
       .post(`${BASE}/${ORDEN_ID}/cerrar-trato`)
-      .set("Authorization", auth(COMPRADOR))
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR))
       .send({ precio: -1 });
     expect(res.status).toBe(400);
   });
@@ -266,7 +280,8 @@ describe("GET /ordenes-fabricacion/fabricantes-sugeridos: filtros de zona", () =
       .get(
         `${base}&provincias=6,02&departamentos=6007&localidades=06007010,6007010000`,
       )
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(200);
     expect(spy).toHaveBeenCalledWith(
       DISENO_ID,
@@ -287,7 +302,8 @@ describe("GET /ordenes-fabricacion/fabricantes-sugeridos: filtros de zona", () =
     const spy = spyServicio();
     const res = await request(app)
       .get(`${base}&provincias=06&provincias=02&provincias=6`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(200);
     expect(spy.mock.calls[0][6]).toEqual({
       provincias: ["06", "02"],
@@ -298,7 +314,10 @@ describe("GET /ordenes-fabricacion/fabricantes-sugeridos: filtros de zona", () =
 
   it("sin filtros manda arrays vacíos", async () => {
     const spy = spyServicio();
-    await request(app).get(base).set("Authorization", auth(COMPRADOR));
+    await request(app)
+      .get(base)
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(spy.mock.calls[0][6]).toEqual({
       provincias: [],
       departamentos: [],
@@ -319,7 +338,8 @@ describe("GET /ordenes-fabricacion/fabricantes-sugeridos: filtros de zona", () =
     const spy = spyServicio();
     const res = await request(app)
       .get(`${base}&${encodeURI(filtro)}`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(400);
     expect(spy).not.toHaveBeenCalled();
   });
@@ -331,7 +351,8 @@ describe("GET /ordenes-fabricacion/fabricantes-sugeridos: filtros de zona", () =
     ).join(",");
     const res = await request(app)
       .get(`${base}&provincias=${muchos}`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(400);
     expect(spy).not.toHaveBeenCalled();
   });

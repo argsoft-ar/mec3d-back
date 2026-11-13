@@ -44,7 +44,22 @@ export const envConfig = {
   cors: {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
   },
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
 };
+
+// Valor de `trust proxy` de Express. Por defecto 1 (solo el proxy de Render). Si el front
+// proxya /api/* desde Vercel hay un salto más (cliente → Vercel → Render): TRUST_PROXY=2 hace
+// que req.ip sea la IP del cliente y no la del edge de Vercel (rate limit por IP).
+export function parseTrustProxy(
+  raw: string | undefined,
+): number | boolean | string {
+  const valor = raw?.trim();
+  if (!valor) return 1;
+  if (/^\d+$/.test(valor)) return Number(valor);
+  if (valor === "true") return true;
+  if (valor === "false") return false;
+  return valor; // lista de IPs/subredes o "loopback", "uniquelocal", etc.
+}
 
 // ── Código de entrega (HMAC) ─────────────────────────────────────────────────
 const MIN_DELIVERY_SECRET_LENGTH = 32;

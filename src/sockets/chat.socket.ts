@@ -1,13 +1,14 @@
 import { Server, Socket } from "socket.io";
 import { z } from "zod";
 import { Server as HttpServer } from "http";
-import { verifyToken } from "../utils/jwt.util";
+import { verifySocketToken } from "../utils/jwt.util";
 import { chatRepository } from "../repositories/chat.repository";
 import { mapMensaje, chatService } from "../services/chat.service";
 import { setIO } from "./io.instance";
 import { notificarMensaje, salaUsuario } from "./notificaciones";
 import { TokenPayload } from "../interfaces/auth.interface";
-import { quitarBarrasFinales } from "../utils/url.util";
+import { envConfig } from "../config/env.config";
+import { parseAllowedOrigins } from "../utils/cors-origins.util";
 
 // Ventana deslizante en memoria para limitar mensajes por usuario: express-rate-limit
 // no aplica a WebSockets, así que se replica la misma idea de forma equivalente a chatLimiter.
@@ -77,6 +78,30 @@ interface MarcarLeidoAck {
 
 let purgaTimer: NodeJS.Timeout | null = null;
 
+// Autenticación en el handshake: el cliente obtiene un token efímero con
+// POST /api/v1/auth/socket-token (la cookie de sesión no viaja: el socket conecta directo a
+// la API, en otro dominio) y lo envía en `auth.token`. Solo se aceptan tokens con aud "socket";
+// un JWT de sesión se rechaza.
+export function autenticarHandshake(
+  socket: Pick<Socket, "handshake" | "data">,
+  next: (err?: Error) => void,
+): void {
+  const raw: unknown = socket.handshake.auth?.token;
+  if (typeof raw !== "string" || raw.length === 0) {
+    next(new Error("No autorizado"));
+    return;
+  }
+
+  const payload = verifySocketToken(raw);
+  if (!payload) {
+    next(new Error("Token inválido o expirado"));
+    return;
+  }
+
+  socket.data.user = payload;
+  next();
+}
+
 function purgarPeriodicamente(): void {
   if (purgaTimer) return;
   purgaTimer = setInterval(() => purgarMensajesViejos(), MENSAJES_WINDOW_MS);
@@ -84,9 +109,7 @@ function purgarPeriodicamente(): void {
 }
 
 export function initChatSocket(httpServer: HttpServer): Server {
-  const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
-    .split(",")
-    .map((o) => quitarBarrasFinales(o.trim()));
+  const allowedOrigins = parseAllowedOrigins(envConfig.cors.origin);
 
   const io = new Server(httpServer, {
     cors: {
@@ -95,24 +118,7 @@ export function initChatSocket(httpServer: HttpServer): Server {
     },
   });
 
-  // Autenticación en el handshake: se rechaza toda conexión sin un JWT válido,
-  // equivalente a authenticateToken pero adaptado al protocolo de sockets.
-  io.use((socket, next) => {
-    const token = socket.handshake.auth?.token as string | undefined;
-    if (!token) {
-      next(new Error("No autorizado"));
-      return;
-    }
-
-    const payload = verifyToken(token);
-    if (!payload) {
-      next(new Error("Token inválido o expirado"));
-      return;
-    }
-
-    socket.data.user = payload as TokenPayload;
-    next();
-  });
+  io.use(autenticarHandshake);
 
   io.on("connection", (socket: Socket) => {
     // Room personal derivada del JWT; socket.io la abandona sola al desconectar.

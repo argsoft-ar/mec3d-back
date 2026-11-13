@@ -1,5 +1,8 @@
 import { enSecuencia } from "../src/utils/async.util";
 
+// Con todas las suites en paralelo el worker puede tardar más de 5 s en atender los timers.
+jest.setTimeout(30_000);
+
 describe("enSecuencia", () => {
   it("ejecuta de a uno, en orden, y devuelve los resultados en ese orden", async () => {
     const eventos: string[] = [];

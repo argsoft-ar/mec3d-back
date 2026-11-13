@@ -13,7 +13,7 @@ const uuidParam = {
   schema: { type: "string", format: "uuid" },
 };
 
-const bearer = [{ bearerAuth: [] }];
+const cookieSession = [{ cookieAuth: [] }];
 
 const estadoOrden = {
   type: "string",
@@ -36,7 +36,10 @@ const codigosZona = (name: string, description: string) => ({
   description: `${description} Parámetro repetido (?${name}=a&${name}=b) o separado por coma (?${name}=a,b); hasta 50 valores.`,
   style: "form",
   explode: true,
-  schema: { type: "array", items: { type: "string", pattern: String.raw`^\d+$` } },
+  schema: {
+    type: "array",
+    items: { type: "string", pattern: String.raw`^\d+$` },
+  },
 });
 
 export const ordenFabricacionSchemaDoc = {
@@ -158,7 +161,7 @@ export const ordenFabricacionPaths = {
       summary: "Fabricantes compatibles para una compra de fabricación",
       description:
         "Solo el comprador dueño de la compra. Filtra por tecnología/material compatibles y, opcionalmente, por zonas con semántica de refinamiento: un nivel más específico reemplaza a su ancestro. Se descarta una provincia si algún departamento o localidad elegidos empieza con su código, y un departamento si alguna localidad elegida (censal de 8 o Georef de 11 dígitos) empieza con su código. Los códigos restantes se combinan con OR (p. ej. provincias=06,14 + departamentos=06441 → departamento 06441 O provincia 14). La ubicación del fabricante sale de zona_id (localidad o departamento INDEC, restaurando el cero inicial) y de georef_localidad_id (sus 2/5/8 primeros dígitos son provincia/departamento/localidad censal); basta que coincida cualquiera de los dos. Sin filtros de zona no se filtra por ubicación. Orden: misma zona del diseñador, misma provincia, resto; luego puntuación.",
-      security: bearer,
+      security: cookieSession,
       parameters: [
         {
           name: "disenoId",
@@ -209,7 +212,7 @@ export const ordenFabricacionPaths = {
           },
         },
         400: err("Parámetros inválidos (incluye códigos de zona mal formados)"),
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         403: err("La compra no es del usuario"),
         404: err("Compra o diseño no encontrado"),
         409: err("La compra no admite nuevas solicitudes"),
@@ -222,7 +225,7 @@ export const ordenFabricacionPaths = {
       summary: "Dashboard del fabricante: órdenes cerradas",
       description:
         "Órdenes del fabricante autenticado en trato_cerrado, confirmada o completado, de la más reciente a la más antigua. El rol se verifica contra la base.",
-      security: bearer,
+      security: cookieSession,
       parameters: [
         {
           name: "page",
@@ -257,7 +260,7 @@ export const ordenFabricacionPaths = {
           },
         },
         400: err("Parámetros de paginación inválidos"),
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         403: err("Solo los fabricantes pueden ver sus órdenes cerradas"),
       },
     },
@@ -268,7 +271,7 @@ export const ordenFabricacionPaths = {
       summary: "Especificaciones del diseño de una orden",
       description:
         "Solo el comprador o el fabricante de la orden. Nunca devuelve archivoUrl; el archivo se descarga con GET /ordenes-fabricacion/{id}/descargar-diseno.",
-      security: bearer,
+      security: cookieSession,
       parameters: [uuidParam],
       responses: {
         200: {
@@ -286,7 +289,7 @@ export const ordenFabricacionPaths = {
           },
         },
         400: err("ID inválido"),
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         403: err("No autorizado para operar sobre esta orden de fabricación"),
         404: err("Orden de fabricación no encontrada"),
       },
@@ -298,12 +301,12 @@ export const ordenFabricacionPaths = {
       summary: "Descargar el archivo del diseño (fabricante)",
       description:
         "Solo el fabricante de la orden, con la orden en trato_cerrado o confirmada y la compra pagada. Redirige (302, Cache-Control: no-store) a una URL firmada de vida corta.",
-      security: bearer,
+      security: cookieSession,
       parameters: [uuidParam],
       responses: {
         302: { description: "Redirección a la URL firmada" },
         400: err("ID inválido"),
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         403: err("No autorizado para descargar este archivo"),
         404: err("Orden de fabricación no encontrada"),
         409: err(

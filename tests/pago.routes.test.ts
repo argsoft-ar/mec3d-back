@@ -12,6 +12,7 @@ jest.mock("../src/repositories/user.repository", () => ({
 
 import request from "supertest";
 import app from "../src/app";
+import { ORIGIN } from "./helpers/session";
 import { generateToken } from "../src/utils/jwt.util";
 
 const UUID = "3f2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f";
@@ -57,7 +58,7 @@ describe("endpoints de pago protegidos", () => {
     ["post", `/api/v1/admin/payouts/${UUID}/marcar-pagado`],
     ["post", "/api/v1/admin/pagos/reembolsos-pendientes/reintentar"],
   ] as const)("%s %s exige token", async (metodo, ruta) => {
-    const res = await request(app)[metodo](ruta);
+    const res = await request(app)[metodo](ruta).set("Origin", ORIGIN);
     expect(res.status).toBe(401);
   });
 });
@@ -67,7 +68,8 @@ describe("endpoints admin", () => {
     mockFindById.mockResolvedValue({ id: UUID, rol_principal: "comprador" });
     const res = await request(app)
       .get("/api/v1/admin/payouts/pendientes")
-      .set("Authorization", `Bearer ${token("comprador")}`);
+      .set("Origin", ORIGIN)
+      .set("Cookie", `mec3d_session=${token("comprador")}`);
     expect(res.status).toBe(403);
   });
 
@@ -75,7 +77,8 @@ describe("endpoints admin", () => {
     mockFindById.mockResolvedValue({ id: UUID, rol_principal: "comprador" });
     const res = await request(app)
       .post("/api/v1/admin/pagos/reembolsos-pendientes/reintentar")
-      .set("Authorization", `Bearer ${token("admin")}`);
+      .set("Origin", ORIGIN)
+      .set("Cookie", `mec3d_session=${token("admin")}`);
     expect(res.status).toBe(403);
   });
 
@@ -83,7 +86,8 @@ describe("endpoints admin", () => {
     mockFindById.mockResolvedValue({ id: UUID, rol_principal: "admin" });
     const res = await request(app)
       .post(`/api/v1/admin/payouts/${UUID}/marcar-pagado`)
-      .set("Authorization", `Bearer ${token("admin")}`)
+      .set("Origin", ORIGIN)
+      .set("Cookie", `mec3d_session=${token("admin")}`)
       .send({ referencia: "" });
     expect(res.status).toBe(400);
   });
@@ -93,14 +97,16 @@ describe("validación de entrada", () => {
   it("mi-billetera rechaza un estado inválido", async () => {
     const res = await request(app)
       .get("/api/v1/usuarios/mi-billetera?estado=liberado")
-      .set("Authorization", `Bearer ${token("comprador")}`);
+      .set("Origin", ORIGIN)
+      .set("Cookie", `mec3d_session=${token("comprador")}`);
     expect(res.status).toBe(400);
   });
 
   it("estado-pago rechaza un id que no es UUID", async () => {
     const res = await request(app)
       .get("/api/v1/compras/no-uuid/estado-pago")
-      .set("Authorization", `Bearer ${token("comprador")}`);
+      .set("Origin", ORIGIN)
+      .set("Cookie", `mec3d_session=${token("comprador")}`);
     expect(res.status).toBe(400);
   });
 });

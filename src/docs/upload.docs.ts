@@ -5,7 +5,7 @@ export const uploadPaths = {
       summary: "Subir un archivo de diseño (modelo 3D o plano técnico)",
       description:
         "Modelos 3D: STL, 3MF, OBJ, STEP/STP, hasta 10 MB. Planos técnicos: PDF, DWG o DXF, hasta 5 MB (el tipo se decide por la extensión). Se valida la firma del contenido: PDF empieza con `%PDF-`, DWG con `AC10`, DXF es ASCII (código de grupo + SECTION) o binario (`AutoCAD Binary DXF`).",
-      security: [{ bearerAuth: [] }],
+      security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
         content: {
@@ -68,7 +68,7 @@ export const uploadPaths = {
     post: {
       tags: ["Archivos"],
       summary: "Subir una imagen",
-      security: [{ bearerAuth: [] }],
+      security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
         content: {
