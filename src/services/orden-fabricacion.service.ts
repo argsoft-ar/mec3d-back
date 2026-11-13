@@ -8,6 +8,7 @@ import { disenoRepository } from "../repositories/diseno.repository";
 import { getProvinciaPrefix, refinarZonas } from "../utils/zona.util";
 import { centavosAPesos, pesosACentavos } from "../utils/money.util";
 import { withTransaction } from "../utils/transaction.util";
+import { enSecuencia } from "../utils/async.util";
 import { sanitizeForLog } from "../utils/log.util";
 import {
   MAX_INTENTOS_CODIGO,
@@ -77,7 +78,13 @@ const ESTADOS_CERRADOS_FABRICANTE = [
 ];
 
 // Ventana de descarga del archivo: trato cerrado hasta confirmarse la entrega, con pago acreditado.
-const ESTADOS_DESCARGA = ["trato_cerrado", "confirmada"];
+const ESTADOS_DESCARGA = new Set<string>(["trato_cerrado", "confirmada"]);
+
+const SIN_FILTRO_ZONAS: Readonly<FiltroZonas> = Object.freeze({
+  provincias: [],
+  departamentos: [],
+  localidades: [],
+});
 
 function puedeDescargarArchivo(
   row: { fabricante_id: string; estado: string; compra_estado: string },
@@ -85,7 +92,7 @@ function puedeDescargarArchivo(
 ): boolean {
   return (
     row.fabricante_id === userId &&
-    ESTADOS_DESCARGA.includes(row.estado) &&
+    ESTADOS_DESCARGA.has(row.estado) &&
     row.compra_estado === "pagada"
   );
 }
@@ -296,12 +303,8 @@ export const ordenFabricacionService = {
       }
       assertCompraAbiertaParaFabricacion(bloqueada);
 
-      const creadas: {
-        orden: any;
-        conversacionId: string;
-        mensajeSolicitud: MensajeCreadoRow | null;
-      }[] = [];
-      for (const fabricanteId of fabricanteIds) {
+      // Secuencial: todas las queries comparten el cliente de la transacción.
+      return enSecuencia(fabricanteIds, async (fabricanteId) => {
         const orden =
           (await ordenFabricacionRepository.getActivaPorCompradorYFabricante(
             compradorId,
@@ -350,13 +353,12 @@ export const ordenFabricacionService = {
             client,
           );
         }
-        creadas.push({
+        return {
           orden,
           conversacionId: conversacion.id,
           mensajeSolicitud,
-        });
-      }
-      return creadas;
+        };
+      });
     });
 
     await notificarSolicitudes(resultado, {
@@ -378,7 +380,7 @@ export const ordenFabricacionService = {
     page: number,
     limit: number,
     material?: string,
-    zonas: FiltroZonas = { provincias: [], departamentos: [], localidades: [] },
+    zonas?: FiltroZonas,
   ): Promise<FabricanteSugerido[]> {
     const compra = await compraRepository.getById(compraId);
     if (!compra) {
@@ -415,7 +417,7 @@ export const ordenFabricacionService = {
         );
 
     // Un nivel más específico reemplaza a su ancestro (ver refinarZonas); el resto va con OR.
-    const refinadas = refinarZonas(zonas);
+    const refinadas = refinarZonas(zonas ?? SIN_FILTRO_ZONAS);
     const rows = await ordenFabricacionRepository.getFabricantesSugeridos(
       diseno.tecnologia_id,
       materialIds,
@@ -997,7 +999,7 @@ export const ordenFabricacionService = {
     }
     // Ventana de descarga: desde que se cierra el trato hasta que se confirma la
     // entrega (estado pasa a 'completado' y la solicitud se oculta para el fabricante).
-    if (!ESTADOS_DESCARGA.includes(row.estado)) {
+    if (!ESTADOS_DESCARGA.has(row.estado)) {
       throw new ConflictError(
         "El archivo solo está disponible mientras la orden está en curso",
       );

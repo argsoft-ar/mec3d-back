@@ -66,7 +66,7 @@ export const authPaths = {
             type: "string",
             minLength: 3,
             maxLength: 30,
-            pattern: "^\\w+$",
+            pattern: String.raw`^\w+$`,
           },
         },
       ],

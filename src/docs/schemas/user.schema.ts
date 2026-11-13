@@ -40,7 +40,7 @@ export const userSchemaDoc = {
         type: "string",
         minLength: 3,
         maxLength: 30,
-        pattern: "^\\w+$",
+        pattern: String.raw`^\w+$`,
         example: "juan_perez",
       },
       password: { type: "string", minLength: 8, example: "Password123" },
