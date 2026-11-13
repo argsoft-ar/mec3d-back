@@ -1,12 +1,17 @@
 import bcrypt from "bcrypt";
 import { userRepository } from "../repositories/user.repository";
-import { generateToken } from "../utils/jwt.util";
+import { generateSocketToken, generateToken } from "../utils/jwt.util";
 import {
   RegisterRequest,
   RegisterResponse,
   LoginRequest,
   LoginResponse,
+  MeResponse,
+  SessionResult,
+  SocketTokenResponse,
+  TokenPayload,
 } from "../interfaces/auth.interface";
+import { RolUsuario, UserResponse } from "../interfaces/user.interface";
 import { ConflictError, UnauthorizedError } from "../errors/app-error";
 import { isReservedUsername } from "../utils/username.util";
 import { SALT_ROUNDS } from "../utils/password.util";
@@ -30,8 +35,50 @@ function mapUniqueViolation(error: unknown): ConflictError | null {
   return null;
 }
 
+interface UsuarioSesionRow {
+  id: string;
+  email: string;
+  rol_principal: RolUsuario;
+  zona_id: number | null;
+  cuenta_mercadopago: string | null;
+}
+
+// Mismo shape de `user` que devuelve el login (y /auth/me).
+function mapUsuarioSesion(row: UsuarioSesionRow): UserResponse {
+  return {
+    id: row.id,
+    email: row.email,
+    rolPrincipal: row.rol_principal,
+    zonaId: row.zona_id,
+    cuentaMercadopago: row.cuenta_mercadopago,
+  };
+}
+
 export const authService = {
-  async register(data: RegisterRequest): Promise<RegisterResponse> {
+  /** Firma un JWT de sesión (para la cookie) con los claims mínimos. */
+  createSessionToken(payload: TokenPayload): string {
+    return generateToken(payload);
+  },
+
+  /** JWT efímero (~60 s, aud "socket") para el handshake de socket.io. */
+  createSocketToken(payload: TokenPayload): SocketTokenResponse {
+    return { token: generateSocketToken(payload) };
+  },
+
+  async me(userId: string): Promise<MeResponse> {
+    const user = (await userRepository.findById(
+      userId,
+    )) as UsuarioSesionRow | null;
+    // Cuenta eliminada con una cookie todavía vigente: se trata como sesión inválida.
+    if (!user) {
+      throw new UnauthorizedError("Sesión inválida");
+    }
+    return { user: mapUsuarioSesion(user) };
+  },
+
+  async register(
+    data: RegisterRequest,
+  ): Promise<SessionResult<RegisterResponse>> {
     const {
       email,
       username,
@@ -70,16 +117,23 @@ export const authService = {
       throw mapUniqueViolation(error) ?? error;
     }
 
-    // Mapear respuesta de BD (snake_case) a camelCase
+    // Mapear respuesta de BD (snake_case) a camelCase. El registro deja la sesión abierta.
     return {
-      message: "Usuario registrado exitosamente",
-      user: {
+      sessionToken: generateToken({
         id: newUser.id,
         email: newUser.email,
-        username: newUser.username,
         rolPrincipal: newUser.rol_principal,
-        zonaId: newUser.zona_id,
-        creadoEn: newUser.creado_en,
+      }),
+      body: {
+        message: "Usuario registrado exitosamente",
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          username: newUser.username,
+          rolPrincipal: newUser.rol_principal,
+          zonaId: newUser.zona_id,
+          creadoEn: newUser.creado_en,
+        },
       },
     };
   },
@@ -92,7 +146,7 @@ export const authService = {
     return { disponible: !taken };
   },
 
-  async login(data: LoginRequest): Promise<LoginResponse> {
+  async login(data: LoginRequest): Promise<SessionResult<LoginResponse>> {
     const { email, password } = data;
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -108,23 +162,19 @@ export const authService = {
       throw new UnauthorizedError("Credenciales inválidas");
     }
 
-    // Generar el JWT con camelCase
-    const token = generateToken({
+    // Generar el JWT de sesión (viaja solo en la cookie HttpOnly, nunca en el body)
+    const sessionToken = generateToken({
       id: user.id,
       email: user.email,
       rolPrincipal: user.rol_principal,
     });
 
-    // Devolver token y datos básicos del usuario (nunca el password_hash)
+    // Datos básicos del usuario (nunca el password_hash)
     return {
-      message: "Login exitoso",
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        rolPrincipal: user.rol_principal,
-        zonaId: user.zona_id,
-        cuentaMercadopago: user.cuenta_mercadopago,
+      sessionToken,
+      body: {
+        message: "Login exitoso",
+        user: mapUsuarioSesion(user),
       },
     };
   },

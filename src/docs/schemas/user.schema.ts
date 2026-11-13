@@ -79,10 +79,27 @@ export const userSchemaDoc = {
   },
   LoginResponse: {
     type: "object",
+    description:
+      "El JWT de sesión NO viaja en el body: se entrega en la cookie HttpOnly mec3d_session (header Set-Cookie).",
     properties: {
       message: { type: "string", example: "Login exitoso" },
-      token: { type: "string" },
       user: { $ref: "#/components/schemas/UserResponse" },
+    },
+  },
+  MeResponse: {
+    type: "object",
+    properties: {
+      user: { $ref: "#/components/schemas/UserResponse" },
+    },
+  },
+  SocketTokenResponse: {
+    type: "object",
+    properties: {
+      token: {
+        type: "string",
+        description:
+          'JWT efímero (~60 s, aud "socket") para socket.handshake.auth.token. No sirve como sesión HTTP.',
+      },
     },
   },
 };

@@ -39,7 +39,7 @@ export const productPaths = {
     post: {
       tags: ["Productos"],
       summary: "Crear un nuevo producto",
-      security: [{ bearerAuth: [] }],
+      security: [{ cookieAuth: [] }],
       requestBody: {
         required: true,
         content: {
@@ -82,7 +82,7 @@ export const productPaths = {
     get: {
       tags: ["Productos"],
       summary: "Obtener mis productos como diseñador",
-      security: [{ bearerAuth: [] }],
+      security: [{ cookieAuth: [] }],
       responses: {
         200: {
           description: "Lista de mis productos",
@@ -212,7 +212,7 @@ export const productPaths = {
     put: {
       tags: ["Productos"],
       summary: "Actualizar un producto completo",
-      security: [{ bearerAuth: [] }],
+      security: [{ cookieAuth: [] }],
       parameters: [
         {
           name: "id",
@@ -271,7 +271,7 @@ export const productPaths = {
     patch: {
       tags: ["Productos"],
       summary: "Actualizar parcialmente un producto",
-      security: [{ bearerAuth: [] }],
+      security: [{ cookieAuth: [] }],
       parameters: [
         {
           name: "id",
@@ -316,7 +316,7 @@ export const productPaths = {
     delete: {
       tags: ["Productos"],
       summary: "Eliminar un producto",
-      security: [{ bearerAuth: [] }],
+      security: [{ cookieAuth: [] }],
       parameters: [
         {
           name: "id",

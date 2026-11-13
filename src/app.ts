@@ -1,6 +1,7 @@
 import express, { Application } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
 import "./types/express";
 import { router } from "./routes";
@@ -8,21 +9,24 @@ import webhookRoutes from "./routes/webhook.routes";
 import { envConfig } from "./config/env.config";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import { apiLimiter } from "./middlewares/rate-limit.middleware";
+import { createCsrfProtection } from "./middlewares/csrf.middleware";
 import { swaggerSpec } from "./docs/swagger.config";
-import { quitarBarrasFinales } from "./utils/url.util";
+import { parseAllowedOrigins } from "./utils/cors-origins.util";
 
 // Inicializar Express
 const app: Application = express();
 
 // Render (y cualquier PaaS) termina TLS en un proxy: sin esto req.ip es la IP del proxy y
-// todos los clientes comparten el mismo bucket de rate limit.
-app.set("trust proxy", 1);
+// todos los clientes comparten el mismo bucket de rate limit. Configurable con TRUST_PROXY
+// (ver env.config) para el salto extra del proxy /api/* de Vercel.
+app.set("trust proxy", envConfig.trustProxy);
 
 // Lista de orígenes permitidos (soporta múltiples separados por coma)
 // Se eliminan slashes finales para evitar mismatch con el header Origin del browser
-const allowedOrigins = envConfig.cors.origin
-  .split(",")
-  .map((o) => quitarBarrasFinales(o.trim()));
+const allowedOrigins = parseAllowedOrigins(envConfig.cors.origin);
+
+// Rutas server-to-server (sin navegador ni cookie): exentas del chequeo de Origin.
+const CSRF_EXEMPT_PATHS = ["/api/v1/webhooks"];
 
 // Middlewares de seguridad y utilidades
 app.use(helmet()); // Protege configurando cabeceras HTTP
@@ -37,8 +41,17 @@ app.use(
 // necesita raw body).
 app.use("/api/v1/webhooks", webhookRoutes);
 
+app.use(cookieParser()); // Sesión en cookie HttpOnly (mec3d_session)
 app.use(express.json()); // Parsea requests entrantes con payloads JSON
 app.use(express.urlencoded({ extended: true })); // Parsea payloads URL-encoded
+
+// CSRF: POST/PUT/PATCH/DELETE exigen Origin (o Referer) dentro de la allowlist de CORS
+app.use(
+  createCsrfProtection({
+    allowedOrigins,
+    exemptPathPrefixes: CSRF_EXEMPT_PATHS,
+  }),
+);
 
 // Rate limiting global
 app.use("/api/v1", apiLimiter);

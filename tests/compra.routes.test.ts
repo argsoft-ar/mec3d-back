@@ -15,6 +15,7 @@ jest.mock("../src/repositories/user.repository", () => ({
 
 import request from "supertest";
 import app from "../src/app";
+import { ORIGIN } from "./helpers/session";
 import pool from "../src/config/db.config";
 import { generateToken } from "../src/utils/jwt.util";
 import { compraRepository } from "../src/repositories/compra.repository";
@@ -28,7 +29,7 @@ const COMPRADOR = "5c2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f";
 const AJENO = "7e2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f";
 
 const auth = (id: string) =>
-  `Bearer ${generateToken({ id, email: "x@mec3d.com", rolPrincipal: "comprador" })}`;
+  `mec3d_session=${generateToken({ id, email: "x@mec3d.com", rolPrincipal: "comprador" })}`;
 
 const filaCompra = (extra: Record<string, unknown> = {}) => ({
   id: COMPRA_ID,
@@ -63,20 +64,24 @@ describe("POST /compras/:id/cancelar", () => {
   const ruta = `/api/v1/compras/${COMPRA_ID}/cancelar`;
 
   it("exige token", async () => {
-    expect((await request(app).post(ruta)).status).toBe(401);
+    expect((await request(app).post(ruta).set("Origin", ORIGIN)).status).toBe(
+      401,
+    );
   });
 
   it("valida que el id sea UUID", async () => {
     const res = await request(app)
       .post("/api/v1/compras/no-uuid/cancelar")
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(400);
   });
 
   it("el comprador cancela su compra pendiente: 200 { message, data }", async () => {
     const res = await request(app)
       .post(ruta)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       message: "Compra cancelada",
@@ -89,7 +94,10 @@ describe("POST /compras/:id/cancelar", () => {
   });
 
   it("otro usuario recibe 403 y no se cancela nada", async () => {
-    const res = await request(app).post(ruta).set("Authorization", auth(AJENO));
+    const res = await request(app)
+      .post(ruta)
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(AJENO));
     expect(res.status).toBe(403);
     expect(compraRepository.cancelar).not.toHaveBeenCalled();
   });
@@ -98,7 +106,8 @@ describe("POST /compras/:id/cancelar", () => {
     jest.spyOn(compraRepository, "lockById").mockResolvedValue(null);
     const res = await request(app)
       .post(ruta)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(404);
   });
 
@@ -108,7 +117,8 @@ describe("POST /compras/:id/cancelar", () => {
       .mockResolvedValue(filaCompra({ estado: "pagada" }) as never);
     const res = await request(app)
       .post(ruta)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("COMPRA_NO_CANCELABLE");
     expect(compraRepository.cancelar).not.toHaveBeenCalled();
@@ -120,7 +130,8 @@ describe("POST /compras/:id/cancelar", () => {
       .mockResolvedValue([{ id: "p1", estado: "aprobado" }] as never);
     const res = await request(app)
       .post(ruta)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("COMPRA_NO_CANCELABLE");
     expect(compraRepository.cancelar).not.toHaveBeenCalled();
@@ -135,7 +146,8 @@ describe("POST /compras/:id/pagar sobre una compra cancelada", () => {
     const crear = jest.spyOn(pagoRepository, "crearPendiente");
     const res = await request(app)
       .post(`/api/v1/compras/${COMPRA_ID}/pagar`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(409);
     expect(crear).not.toHaveBeenCalled();
   });
@@ -148,7 +160,8 @@ describe("GET /compras/mis-compras", () => {
       .mockResolvedValue({ rows: [] } as never);
     const res = await request(app)
       .get("/api/v1/compras/mis-compras")
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
     const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];

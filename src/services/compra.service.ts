@@ -219,8 +219,9 @@ export const compraService = {
     if (tipo === "fabricacion") {
       return { compra: mapped, initPoint: null };
     }
-    // Compra nueva o pendiente reutilizada: mismo flujo que POST /compras/:id/pagar.
-    const { initPoint } = await this.pagar(compra.id, compradorId);
+    // Compra nueva o pendiente reutilizada: el monto ya quedó al precio actual dentro de la
+    // transacción anterior, así que se inicia el pago directamente.
+    const { initPoint } = await pagoService.iniciarPago(compra.id, compradorId);
     return { compra: mapped, initPoint };
   },
 
@@ -241,7 +242,40 @@ export const compraService = {
   },
 
   // Reintento de pago (preference vencida o abandonada) de una compra 'pendiente_pago'.
+  // En descargas el monto se re-fija al precio ACTUAL del diseño (igual que en crear) y se
+  // exige que el diseño siga publicado: sin esto, una compra pendiente creada a un precio viejo
+  // permitía pagar ese monto (o comprar un diseño ya dado de baja) vía este endpoint.
   async pagar(compraId: string, compradorId: string) {
+    await withTransaction(async (client) => {
+      const compra = await compraRepository.lockById(client, compraId);
+      if (!compra) {
+        throw new NotFoundError("Compra no encontrada");
+      }
+      if (compra.id_comprador !== compradorId) {
+        throw new ForbiddenError("No autorizado para pagar esta compra");
+      }
+      if (compra.tipo !== "descarga" || compra.estado !== "pendiente_pago") {
+        return; // fabricación (monto = trato) y estados no pagables: los valida iniciarPago
+      }
+      const diseno = await disenoRepository.getById(compra.id_modelo, client);
+      if (!diseno || diseno.eliminado_en) {
+        throw new NotFoundError("Diseño no encontrado");
+      }
+      const montoActual = pesosACentavos(diseno.precio_base);
+      if (
+        compra.monto_centavos === null ||
+        toCentavos(compra.monto_centavos) !== montoActual
+      ) {
+        const actualizada = await compraRepository.setMontoDescargaPendiente(
+          client,
+          compra.id,
+          montoActual,
+        );
+        if (!actualizada) {
+          throw new ConflictError("La compra no está pendiente de pago");
+        }
+      }
+    });
     return pagoService.iniciarPago(compraId, compradorId);
   },
 

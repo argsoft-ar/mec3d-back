@@ -6,6 +6,7 @@ jest.mock("../src/repositories/user.repository", () => ({
 
 import request from "supertest";
 import app from "../src/app";
+import { ORIGIN } from "./helpers/session";
 import { generateToken } from "../src/utils/jwt.util";
 import { chatRepository } from "../src/repositories/chat.repository";
 
@@ -17,7 +18,7 @@ const FABRICANTE = "6d2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f";
 const AJENO = "7e2b8f0e-6c1a-4b7e-9d52-0a1b2c3d4e5f";
 
 const auth = (id: string) =>
-  `Bearer ${generateToken({ id, email: "x@mec3d.com", rolPrincipal: "comprador" })}`;
+  `mec3d_session=${generateToken({ id, email: "x@mec3d.com", rolPrincipal: "comprador" })}`;
 
 const BASE = "/api/v1/conversaciones";
 const conversacion = {
@@ -42,7 +43,8 @@ describe("POST /conversaciones/:id/leer", () => {
       .mockResolvedValue(undefined);
     const res = await request(app)
       .post(`${BASE}/${CONV}/leer`)
-      .set("Authorization", auth(FABRICANTE));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(FABRICANTE));
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       message: expect.any(String),
@@ -56,7 +58,8 @@ describe("POST /conversaciones/:id/leer", () => {
     const marcar = jest.spyOn(chatRepository, "marcarLeida");
     const res = await request(app)
       .post(`${BASE}/${CONV}/leer`)
-      .set("Authorization", auth(AJENO));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(AJENO));
     expect(res.status).toBe(403);
     expect(marcar).not.toHaveBeenCalled();
   });
@@ -65,19 +68,23 @@ describe("POST /conversaciones/:id/leer", () => {
     jest.spyOn(chatRepository, "getById").mockResolvedValue(null);
     const res = await request(app)
       .post(`${BASE}/${CONV}/leer`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(404);
   });
 
   it("id inválido: 400", async () => {
     const res = await request(app)
       .post(`${BASE}/no-es-uuid/leer`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(400);
   });
 
   it("sin token: 401", async () => {
-    const res = await request(app).post(`${BASE}/${CONV}/leer`);
+    const res = await request(app)
+      .post(`${BASE}/${CONV}/leer`)
+      .set("Origin", ORIGIN);
     expect(res.status).toBe(401);
   });
 });
@@ -89,7 +96,8 @@ describe("GET /conversaciones/no-leidos", () => {
       .mockResolvedValue(5);
     const res = await request(app)
       .get(`${BASE}/no-leidos`)
-      .set("Authorization", auth(COMPRADOR));
+      .set("Origin", ORIGIN)
+      .set("Cookie", auth(COMPRADOR));
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       message: expect.any(String),
