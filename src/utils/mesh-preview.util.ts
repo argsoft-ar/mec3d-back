@@ -252,12 +252,36 @@ function extraerModelos(buf: Uint8Array): Uint8Array[] {
   return archivos.map((trozos) => Buffer.concat(trozos));
 }
 
-const esInicioNombre = (c: number) =>
-  (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95;
-const esCharNombre = (c: number) =>
-  esInicioNombre(c) || (c >= 48 && c <= 57) || c === 45 || c === 46 || c === 58;
+// codePointAt devuelve undefined fuera de rango: nunca es inicio ni carácter de nombre.
+const esInicioNombre = (c: number | undefined) =>
+  c !== undefined && ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95);
+const esCharNombre = (c: number | undefined) =>
+  c !== undefined &&
+  (esInicioNombre(c) || (c >= 48 && c <= 57) || c === 45 || c === 46 || c === 58);
 // Un solo carácter: trim() elimina exactamente el mismo conjunto que \s.
 const esEspacio = (ch: string) => ch.trim() === "";
+
+function saltarEspacios(tag: string, k: number): number {
+  while (k < tag.length && esEspacio(tag[k])) k++;
+  return k;
+}
+
+// Desde el fin del nombre (j): \s*=\s* y valor entre comillas. Devuelve el inicio del valor (k)
+// y la posición de la comilla de cierre, o null si no hay un valor válido.
+function leerValorAtributo(
+  tag: string,
+  j: number,
+): { k: number; cierre: number } | null {
+  let k = saltarEspacios(tag, j);
+  if (tag[k] !== "=") return null;
+  k = saltarEspacios(tag, k + 1);
+  const q = tag[k];
+  if (q !== '"' && q !== "'") return null;
+  // Sin cierre no quedan más comillas de ese tipo: indexOf falla a lo sumo una vez por tipo.
+  const cierre = tag.indexOf(q, k + 1);
+  if (cierre === -1) return null;
+  return { k: k + 1, cierre };
+}
 
 // Pares nombre="valor" / nombre='valor' en orden; equivale a
 // /([A-Za-z_][\w.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g pero en tiempo lineal.
@@ -266,34 +290,20 @@ export function leerAtributos(tag: string): [string, string][] {
   const n = tag.length;
   let i = 0;
   while (i < n) {
-    if (!esInicioNombre(tag.charCodeAt(i))) {
+    if (!esInicioNombre(tag.codePointAt(i))) {
       i++;
       continue;
     }
     let j = i + 1;
-    while (j < n && esCharNombre(tag.charCodeAt(j))) j++;
-    // Si falla desde i, falla desde cualquier posición dentro del mismo nombre: se reanuda en j.
-    let k = j;
-    while (k < n && esEspacio(tag[k])) k++;
-    if (tag[k] !== "=") {
+    while (j < n && esCharNombre(tag.codePointAt(j))) j++;
+    const valor = leerValorAtributo(tag, j);
+    if (valor === null) {
+      // Si falla desde i, falla desde cualquier posición dentro del mismo nombre: se reanuda en j.
       i = j;
       continue;
     }
-    k++;
-    while (k < n && esEspacio(tag[k])) k++;
-    const q = tag[k];
-    if (q !== '"' && q !== "'") {
-      i = j;
-      continue;
-    }
-    // Sin cierre no quedan más comillas de ese tipo: indexOf falla a lo sumo una vez por tipo.
-    const cierre = tag.indexOf(q, k + 1);
-    if (cierre === -1) {
-      i = j;
-      continue;
-    }
-    pares.push([tag.slice(i, j), tag.slice(k + 1, cierre)]);
-    i = cierre + 1;
+    pares.push([tag.slice(i, j), tag.slice(valor.k, valor.cierre)]);
+    i = valor.cierre + 1;
   }
   return pares;
 }
@@ -338,11 +348,11 @@ function leerModelo(xml: string, b: MallaBuilder): void {
     }
 
     let n = i + 1;
-    if (xml.charCodeAt(n) === 47) n++; // etiqueta de cierre
-    while (n < fin && xml.charCodeAt(n) > 32 && xml.charCodeAt(n) !== 47) n++;
+    if (xml.codePointAt(n) === 47) n++; // etiqueta de cierre
+    while (n < fin && (xml.codePointAt(n) ?? 0) > 32 && xml.codePointAt(n) !== 47) n++;
     const nombre = xml.slice(i + 1, n);
     if (nombre === "mesh") {
-      if (xml.charCodeAt(fin - 1) !== 47) {
+      if (xml.codePointAt(fin - 1) !== 47) {
         enMesh = true;
         offset = b.vertexCount;
       }

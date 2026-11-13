@@ -36,7 +36,7 @@ const codigosZona = (name: string, description: string) => ({
   description: `${description} Parámetro repetido (?${name}=a&${name}=b) o separado por coma (?${name}=a,b); hasta 50 valores.`,
   style: "form",
   explode: true,
-  schema: { type: "array", items: { type: "string", pattern: "^\\d+$" } },
+  schema: { type: "array", items: { type: "string", pattern: String.raw`^\d+$` } },
 });
 
 export const ordenFabricacionSchemaDoc = {

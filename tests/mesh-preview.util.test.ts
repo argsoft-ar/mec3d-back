@@ -500,6 +500,7 @@ describe("leerAtributos", () => {
     ` a=="1" b= ="2" c="3"`,
     ` x="1"y="2"`,
     ` \u00a0x\u00a0=\u00a0"1"`,
+    ` 😀x="1" x😀="2" é="3" ñ_a='4'`,
   ])("coincide con la regex original para %j", (tag) => {
     expect(leerAtributos(tag)).toEqual(referencia(tag));
   });

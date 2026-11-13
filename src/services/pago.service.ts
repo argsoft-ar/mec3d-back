@@ -871,23 +871,26 @@ export const pagoService = {
   // Best-effort tras cancelar una compra: vence las preferences en MP para que no se puedan pagar.
   // Nunca lanza; un cobro que igual entre se reembolsa vía webhook/reconciliación.
   async expirarPreferences(preferenceIds: string[]): Promise<void> {
-    for (const id of preferenceIds) {
-      try {
-        await getMercadoPagoClients().preference.update({
-          id,
-          // El PUT de MP acepta updates parciales; el tipo del SDK exige `items` igual.
-          updatePreferenceRequest: {
-            expires: true,
-            expiration_date_to: new Date().toISOString(),
-          } as PreferenceUpdateRequest,
-        });
-      } catch (error) {
-        console.error(
-          `❌ No se pudo expirar la preference ${id} de Mercado Pago:`,
-          error instanceof Error ? error.message : error,
-        );
-      }
-    }
+    // Llamadas HTTP independientes: en paralelo; cada una captura su propio error.
+    await Promise.all(
+      preferenceIds.map(async (id) => {
+        try {
+          await getMercadoPagoClients().preference.update({
+            id,
+            // El PUT de MP acepta updates parciales; el tipo del SDK exige `items` igual.
+            updatePreferenceRequest: {
+              expires: true,
+              expiration_date_to: new Date().toISOString(),
+            } as PreferenceUpdateRequest,
+          });
+        } catch (error) {
+          console.error(
+            `❌ No se pudo expirar la preference ${id} de Mercado Pago:`,
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }),
+    );
   },
 
   // Compras 'pendiente_pago' (o canceladas con un intento rechazado) con preference reciente: se

@@ -21,7 +21,7 @@ import {
   pesosACentavos,
   toCentavos,
 } from "../utils/money.util";
-import { withTransaction } from "../utils/transaction.util";
+import { Db, withTransaction } from "../utils/transaction.util";
 import {
   esCategoriaPlano,
   MSG_PLANO_SIN_FABRICACION,
@@ -73,6 +73,80 @@ function mapCompra(row: CompraConMaterial): Compra {
   };
 }
 
+// Campos del diseño que usa la creación de compras (los repositorios devuelven la fila sin tipar).
+interface DisenoParaCompra {
+  id: string;
+  disenador_id: string;
+  precio_base: number | string;
+  categoria_nombre: string | null;
+  eliminado_en: Date | string | null;
+}
+
+// La fabricación bloquea la fila del diseño (ver crear); la descarga solo lo lee.
+async function obtenerDisenoParaCompra(
+  client: Db,
+  tipo: TipoCompra,
+  disenoId: string,
+  compradorId: string,
+): Promise<DisenoParaCompra> {
+  const diseno: DisenoParaCompra | null =
+    tipo === "fabricacion"
+      ? await disenoRepository.lockById(client, disenoId)
+      : await disenoRepository.getById(disenoId, client);
+  if (!diseno || diseno.eliminado_en) {
+    throw new NotFoundError("Diseño no encontrado");
+  }
+
+  if (tipo === "descarga" && diseno.disenador_id === compradorId) {
+    throw new ConflictError("No podés comprar tu propio diseño");
+  }
+  return diseno;
+}
+
+// Descarga activa del comprador sobre el diseño: 409 si ya está cobrada; si está pendiente se
+// reutiliza (con el monto al precio actual). null si no hay ninguna.
+async function resolverDescargaExistente(
+  client: Db,
+  compradorId: string,
+  diseno: DisenoParaCompra,
+): Promise<CompraRow | null> {
+  await compraRepository.lockCompraDescarga(client, compradorId, diseno.id);
+  const existente = await compraRepository.getCompraDescargaExistente(
+    compradorId,
+    diseno.id,
+    client,
+  );
+  if (!existente) return null;
+  if (esCompraCobrada(existente.estado)) {
+    throw new ConflictError(MSG_COMPRA_DUPLICADA, CODIGO_COMPRA_DUPLICADA);
+  }
+  // El precio lo fija el diseño actual, no el de cuando se creó la pendiente.
+  const montoActual = pesosACentavos(diseno.precio_base);
+  if (
+    existente.monto_centavos === null ||
+    toCentavos(existente.monto_centavos) !== montoActual
+  ) {
+    const actualizada = await compraRepository.setMontoDescargaPendiente(
+      client,
+      existente.id,
+      montoActual,
+    );
+    if (!actualizada) {
+      throw new ConflictError("La compra no está pendiente de pago");
+    }
+    return actualizada;
+  }
+  return existente;
+}
+
+function mapearErrorCreacion(tipo: TipoCompra, error: unknown): never {
+  // Respaldo de uq_compra_descarga_activa si el lock no lo cubrió.
+  if (tipo === "descarga" && isUniqueViolation(error)) {
+    throw new ConflictError(MSG_COMPRA_DUPLICADA, CODIGO_COMPRA_DUPLICADA);
+  }
+  throw error;
+}
+
 export const compraService = {
   // descarga: crea la compra 'pendiente_pago' y la preference de Checkout Pro; si ya hay una
   // descarga pendiente del mismo comprador y diseño la reutiliza, y si ya está cobrada responde 409.
@@ -88,53 +162,20 @@ export const compraService = {
     // categoría a "Planos técnicos" (productService), que toma el mismo lock.
     const { compra, materialElegido } = await withTransaction(
       async (client) => {
-        const diseno =
-          tipo === "fabricacion"
-            ? await disenoRepository.lockById(client, disenoId)
-            : await disenoRepository.getById(disenoId, client);
-        if (!diseno || diseno.eliminado_en) {
-          throw new NotFoundError("Diseño no encontrado");
-        }
-
-        if (tipo === "descarga" && diseno.disenador_id === compradorId) {
-          throw new ConflictError("No podés comprar tu propio diseño");
-        }
+        const diseno = await obtenerDisenoParaCompra(
+          client,
+          tipo,
+          disenoId,
+          compradorId,
+        );
 
         if (tipo === "descarga") {
-          await compraRepository.lockCompraDescarga(
+          const existente = await resolverDescargaExistente(
             client,
             compradorId,
-            diseno.id,
+            diseno,
           );
-          const existente = await compraRepository.getCompraDescargaExistente(
-            compradorId,
-            diseno.id,
-            client,
-          );
-          if (existente && esCompraCobrada(existente.estado)) {
-            throw new ConflictError(
-              MSG_COMPRA_DUPLICADA,
-              CODIGO_COMPRA_DUPLICADA,
-            );
-          }
           if (existente) {
-            // El precio lo fija el diseño actual, no el de cuando se creó la pendiente.
-            const montoActual = pesosACentavos(diseno.precio_base);
-            if (
-              existente.monto_centavos === null ||
-              toCentavos(existente.monto_centavos) !== montoActual
-            ) {
-              const actualizada =
-                await compraRepository.setMontoDescargaPendiente(
-                  client,
-                  existente.id,
-                  montoActual,
-                );
-              if (!actualizada) {
-                throw new ConflictError("La compra no está pendiente de pago");
-              }
-              return { compra: actualizada, materialElegido: null };
-            }
             return { compra: existente, materialElegido: null };
           }
         }
@@ -166,16 +207,7 @@ export const compraService = {
             },
             client,
           )
-          .catch((error: unknown) => {
-            // Respaldo de uq_compra_descarga_activa si el lock no lo cubrió.
-            if (tipo === "descarga" && isUniqueViolation(error)) {
-              throw new ConflictError(
-                MSG_COMPRA_DUPLICADA,
-                CODIGO_COMPRA_DUPLICADA,
-              );
-            }
-            throw error;
-          });
+          .catch((error: unknown) => mapearErrorCreacion(tipo, error));
         return { compra: creada, materialElegido: material };
       },
     );
@@ -275,13 +307,16 @@ export const compraService = {
       );
     }
 
-    for (const orden of ordenesCanceladas) {
-      await emitirMensajeSistema(
-        orden.id,
-        "El comprador canceló la solicitud de fabricación",
-        "orden-cancelada",
-      );
-    }
+    // emitirMensajeSistema usa el pool (no un cliente compartido) y nunca rechaza: en paralelo.
+    await Promise.all(
+      ordenesCanceladas.map((orden) =>
+        emitirMensajeSistema(
+          orden.id,
+          "El comprador canceló la solicitud de fabricación",
+          "orden-cancelada",
+        ),
+      ),
+    );
 
     return { compraId, estado: "cancelada" };
   },
