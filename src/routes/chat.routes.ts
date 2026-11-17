@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  cerrarConversacion,
   getMensajes,
   getMisConversaciones,
   getNoLeidos,
@@ -11,7 +12,10 @@ import {
   conversacionIdSchema,
   listarMensajesSchema,
 } from "../schemas/chat.schema";
-import { chatLimiter } from "../middlewares/rate-limit.middleware";
+import {
+  cerrarConversacionLimiter,
+  chatLimiter,
+} from "../middlewares/rate-limit.middleware";
 
 const router = Router();
 
@@ -27,6 +31,16 @@ router.post(
   chatLimiter,
   validateSchema(conversacionIdSchema),
   marcarLeida,
+);
+
+// Cierre del chat por participante (solo lo oculta para quien lo cierra). Durante la
+// negociación cancela (comprador) o rechaza (fabricante) la orden asociada.
+router.post(
+  "/:id/cerrar",
+  authenticateToken,
+  cerrarConversacionLimiter,
+  validateSchema(conversacionIdSchema),
+  cerrarConversacion,
 );
 
 // Historial paginado de mensajes: solo accesible para los participantes (auth se

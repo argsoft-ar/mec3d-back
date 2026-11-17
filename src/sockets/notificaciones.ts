@@ -28,16 +28,39 @@ export function notificarUsuario(
   }
 }
 
-// Avisa a todos los participantes salvo el remitente (los de sistema van a ambos).
+// Saca todos los sockets del usuario de una room (ej. conversación que cerró). No-op sin socket.
+export function sacarUsuarioDeSala(userId: string, sala: string): void {
+  const io = getIO();
+  if (!io || !userId) return;
+  try {
+    io.in(salaUsuario(userId)).socketsLeave(sala);
+  } catch (error) {
+    console.error(
+      `❌ No se pudo sacar al usuario de la sala ${sala}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+// Avisa a todos los participantes salvo el remitente (los de sistema van a ambos) y salvo
+// quien cerró la conversación (ya no la ve: no debe recibir avisos de ella).
 export function notificarMensaje(
   mensaje: MensajeCreadoRow,
   excluir: string[] = [],
 ): void {
+  const cerraron = new Set<string>();
+  if (mensaje.comprador_id && mensaje.cerrada_por_comprador_en) {
+    cerraron.add(mensaje.comprador_id);
+  }
+  if (mensaje.fabricante_id && mensaje.cerrada_por_fabricante_en) {
+    cerraron.add(mensaje.fabricante_id);
+  }
   const destinatarios = new Set(
     [mensaje.comprador_id, mensaje.fabricante_id].filter(
       (id): id is string =>
         typeof id === "string" &&
         id !== mensaje.remitente_id &&
+        !cerraron.has(id) &&
         !excluir.includes(id),
     ),
   );

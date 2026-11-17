@@ -295,6 +295,9 @@ export const SCHEMA_SQL = `
     comprador_id UUID NOT NULL,
     fabricante_id UUID NOT NULL,
     creado_en TIMESTAMP DEFAULT now(),
+    -- Cierre por participante (soft): oculta la conversación solo para quien la cerró.
+    cerrada_por_comprador_en TIMESTAMPTZ NULL,
+    cerrada_por_fabricante_en TIMESTAMPTZ NULL,
     CONSTRAINT fk_conversacion_orden FOREIGN KEY (orden_fabricacion_id) REFERENCES ordenes_fabricacion(id),
     CONSTRAINT fk_conversacion_comprador FOREIGN KEY (comprador_id) REFERENCES usuarios(id),
     CONSTRAINT fk_conversacion_fabricante FOREIGN KEY (fabricante_id) REFERENCES usuarios(id)

@@ -223,6 +223,23 @@ export const ordenFabricacionRepository = {
     return result.rows[0] ?? null;
   },
 
+  // Cierre del chat durante la negociación: el comprador cancela, el fabricante rechaza.
+  // Guard atómico: solo prospera con la orden todavía abierta (sin trato cerrado ni pago).
+  async cerrarPorChat(
+    db: Db,
+    id: string,
+    estado: "cancelado" | "rechazado",
+  ) {
+    const query = `
+      UPDATE ordenes_fabricacion
+      SET estado = $2
+      WHERE id = $1 AND estado IN ('solicitado', 'en_negociacion')
+      RETURNING *;
+    `;
+    const result = await db.query(query, [id, estado]);
+    return result.rows[0] ?? null;
+  },
+
   // Cancelación de la compra por el comprador (sin pago): cancela todas sus órdenes abiertas.
   async cancelarAbiertasPorCompra(
     db: Db,

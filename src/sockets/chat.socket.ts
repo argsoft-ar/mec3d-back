@@ -9,6 +9,7 @@ import { notificarMensaje, salaUsuario } from "./notificaciones";
 import { TokenPayload } from "../interfaces/auth.interface";
 import { envConfig } from "../config/env.config";
 import { parseAllowedOrigins } from "../utils/cors-origins.util";
+import { AppError } from "../errors/app-error";
 
 // Ventana deslizante en memoria para limitar mensajes por usuario: express-rate-limit
 // no aplica a WebSockets, así que se replica la misma idea de forma equivalente a chatLimiter.
@@ -20,6 +21,9 @@ const lecturasPorUsuario = new Map<string, number[]>();
 
 // Las rooms de conversación y las personales (user:<id>) comparten espacio de nombres: solo UUIDs.
 const conversacionIdSchema = z.string().uuid();
+
+const MSG_CONVERSACION_CERRADA =
+  "La otra parte cerró esta conversación: ya no admite mensajes";
 
 function excedeVentana(
   mapa: Map<string, number[]>,
@@ -66,6 +70,7 @@ interface JoinAck {
 interface EnviarMensajeAck {
   ok: boolean;
   error?: string;
+  code?: string;
   mensaje?: unknown;
 }
 
@@ -140,11 +145,11 @@ export function initChatSocket(httpServer: HttpServer): Server {
         }
 
         // Autorización: solo comprador_id/fabricante_id de la conversación pueden
-        // unirse a su room; nunca se confía en la membresía enviada por el cliente.
-        const esParticipante = await chatRepository
-          .esParticipante(conversacionId, userId)
+        // unirse a su room (y no si la cerraron); nunca se confía en el cliente.
+        const puedeUnirse = await chatService
+          .puedeUnirse(conversacionId, userId)
           .catch(() => false);
-        if (!esParticipante) {
+        if (!puedeUnirse) {
           callback?.({
             ok: false,
             error: "No autorizado para esta conversación",
@@ -153,6 +158,19 @@ export function initChatSocket(httpServer: HttpServer): Server {
         }
 
         socket.join(conversacionId);
+        // Re-chequeo post-join: si el usuario cerró la conversación entre el chequeo y el join,
+        // sacarUsuarioDeSala pudo correr antes del join y dejarlo dentro de la room.
+        const sigueAutorizado = await chatService
+          .puedeUnirse(conversacionId, userId)
+          .catch(() => false);
+        if (!sigueAutorizado) {
+          socket.leave(conversacionId);
+          callback?.({
+            ok: false,
+            error: "No autorizado para esta conversación",
+          });
+          return;
+        }
         callback?.({ ok: true });
       },
     );
@@ -187,21 +205,34 @@ export function initChatSocket(httpServer: HttpServer): Server {
           return;
         }
 
-        const esParticipante = await chatRepository
-          .esParticipante(data.conversacionId, userId)
-          .catch(() => false);
-        if (!esParticipante) {
-          callback?.({
-            ok: false,
-            error: "No autorizado para esta conversación",
-          });
+        // Participante, ninguna de las partes cerró el chat y la orden no fue cancelada/rechazada.
+        try {
+          await chatService.assertPuedeEnviar(data.conversacionId, userId);
+        } catch (error) {
+          // AppError fija su prototipo a AppError.prototype, así que `instanceof ConflictError`
+          // nunca es true: se identifica el conflicto por statusCode 409.
+          if (error instanceof AppError && error.statusCode === 409) {
+            // El front usa `code` (p. ej. CONVERSACION_CERRADA) para distinguir el caso.
+            callback?.({
+              ok: false,
+              error: error.message,
+              ...(error.code ? { code: error.code } : {}),
+            });
+          } else {
+            callback?.({
+              ok: false,
+              error: "No autorizado para esta conversación",
+            });
+          }
           return;
         }
 
         // Se persiste antes de emitir: el mensaje nunca vive solo en memoria/socket.
+        // Inserción guardada (CWE-367): re-valida el cierre/estado en la misma sentencia y se
+        // serializa con el cierre; assertPuedeEnviar queda como pre-chequeo rápido (403/404).
         let mensaje;
         try {
-          mensaje = await chatRepository.crearMensaje({
+          mensaje = await chatRepository.crearMensajeSiAbierta({
             conversacionId: data.conversacionId,
             remitenteId: userId,
             contenido,
@@ -209,6 +240,14 @@ export function initChatSocket(httpServer: HttpServer): Server {
           });
         } catch {
           callback?.({ ok: false, error: "No se pudo enviar el mensaje" });
+          return;
+        }
+        if (!mensaje) {
+          callback?.({
+            ok: false,
+            error: MSG_CONVERSACION_CERRADA,
+            code: "CONVERSACION_CERRADA",
+          });
           return;
         }
 
