@@ -7,7 +7,7 @@ describe("migración 7: CHECK de preview_url", () => {
 
   it("no toca las versiones 1-6 ya aplicadas", () => {
     expect(MIGRATIONS.map((m) => m.version)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
     expect(MIGRATIONS[5].sql).toBe(
       "ALTER TABLE disenos ADD COLUMN IF NOT EXISTS preview_url TEXT NULL;",

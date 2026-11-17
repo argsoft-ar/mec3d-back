@@ -123,6 +123,11 @@ export const MAX_PRINT_HOURS = 500;
 export const MAX_PRECIO_BASE = 10_000_000;
 export const MAX_MATERIALES_POR_DISENO = 20;
 export const MAX_PESO_GRAMOS = 1_000_000;
+// Valores de relleno admitidos: "5%" a "100%" en pasos de 5.
+export const INFILL_VALUES = Array.from(
+  { length: 20 },
+  (_, i) => `${(i + 1) * 5}%`,
+) as [string, ...string[]];
 
 // Precio en pesos (precioBase y precios de negociación): finito, positivo, con tope y a lo
 // sumo 2 decimales para que el pasaje a centavos enteros sea exacto.
@@ -158,7 +163,7 @@ const specSchema = z.object({
   soportes: z.enum(["Necesarios", "No necesarios"]),
   configuracion: z.object({
     layer: z.enum(["0.1mm", "0.15mm", "0.2mm", "0.3mm"]),
-    infill: z.enum(["15%", "20%", "25%", "30%", "40%", "50%", "60%"]),
+    infill: z.enum(INFILL_VALUES),
   }),
 });
 

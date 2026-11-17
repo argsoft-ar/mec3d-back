@@ -88,3 +88,25 @@ export const marcarLeida = async (
     next(error);
   }
 };
+
+export const cerrarConversacion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const data = await chatService.cerrarConversacion(req.params.id, userId);
+    res.status(200).json({
+      message: "Conversación cerrada",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

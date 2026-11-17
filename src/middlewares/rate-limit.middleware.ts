@@ -205,8 +205,16 @@ export const webhookLimiter = rateLimit({
 // una negociación activa y tiraba 429 en pleno uso normal del chat.
 export const chatLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
-  max: 180,
-  message: { error: "Demasiadas solicitudes de chat, intente más tarde" },
+  keyGenerator: userKeyGenerator,
+  legacyHeaders: false,
+});
+
+// Cerrar un chat puede cancelar/rechazar la orden y notifica a la contraparte: límite propio
+// por usuario (el chatLimiter, pensado para lecturas frecuentes, es demasiado holgado).
+export const cerrarConversacionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 30,
+  message: { error: "Demasiados cierres de chat, intente más tarde" },
   standardHeaders: true,
   keyGenerator: userKeyGenerator,
   legacyHeaders: false,

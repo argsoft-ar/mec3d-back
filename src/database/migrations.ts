@@ -159,6 +159,7 @@ export const CONVERSACION_LECTURAS_SQL = `
 // 8 = disenos.peso_gramos, categorías 'Envases' y 'Piezas varias', una descarga activa por
 //     comprador + diseño.
 // 9 = conversacion_lecturas (mensajes no leídos) con backfill: lo histórico queda leído.
+// 10 = cierre de conversación por participante (cerrada_por_comprador_en / _fabricante_en).
 export const MIGRATIONS: Migration[] = [
   { version: 1, nombre: "esquema_base", sql: "" },
   {
@@ -327,6 +328,15 @@ export const MIGRATIONS: Migration[] = [
       UNION
       SELECT id, fabricante_id, now() FROM conversaciones
       ON CONFLICT DO NOTHING;
+    `,
+  },
+  {
+    version: 10,
+    nombre: "conversacion_cierre_por_usuario",
+    sql: `
+      ALTER TABLE conversaciones
+        ADD COLUMN IF NOT EXISTS cerrada_por_comprador_en TIMESTAMPTZ NULL,
+        ADD COLUMN IF NOT EXISTS cerrada_por_fabricante_en TIMESTAMPTZ NULL;
     `,
   },
 ];
