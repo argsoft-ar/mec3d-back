@@ -14,7 +14,7 @@ const uuidParam = (description: string) => ({
   schema: { type: "string", format: "uuid" },
 });
 
-const bearer = [{ bearerAuth: [] }];
+const cookieSession = [{ cookieAuth: [] }];
 
 export const pagoSchemaDoc = {
   Compra: {
@@ -161,8 +161,8 @@ export const pagoPaths = {
       tags: ["Pagos"],
       summary: "Crear una compra (descarga o ancla de fabricación)",
       description:
-        "descarga: crea la compra 'pendiente_pago' con monto = precio del diseño y devuelve el initPoint de Checkout Pro. fabricacion: solo crea la compra (monto null, initPoint null); el pago se habilita al cerrarse el trato. El monto nunca viene del cliente. Los diseños de la categoría \"Planos técnicos\" solo admiten tipo descarga (fabricacion responde 400).",
-      security: bearer,
+        "descarga: crea la compra 'pendiente_pago' con monto = precio del diseño y devuelve el initPoint de Checkout Pro. Si el comprador ya tiene una descarga 'pendiente_pago' de ese diseño, la reutiliza (nuevo initPoint, misma respuesta); si ya la tiene pagada o completada responde 409 con code COMPRA_DUPLICADA. fabricacion: solo crea la compra (monto null, initPoint null); el pago se habilita al cerrarse el trato. El monto nunca viene del cliente. Los diseños de la categoría \"Planos técnicos\" solo admiten tipo descarga (fabricacion responde 400).",
+      security: cookieSession,
       requestBody: {
         required: true,
         content: {
@@ -206,11 +206,55 @@ export const pagoPaths = {
         400: err(
           "Datos inválidos, o fabricación solicitada sobre un plano técnico",
         ),
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         404: err("Diseño no encontrado"),
+        409: err(
+          "Compra de descarga duplicada (code COMPRA_DUPLICADA: el diseño ya fue comprado) o compra del propio diseño",
+        ),
         429: err("Demasiados intentos de pago"),
         502: err("No se pudo crear la preference en Mercado Pago"),
         503: err("Pagos no configurados"),
+      },
+    },
+  },
+  "/compras/diseno/{disenoId}/estado": {
+    get: {
+      tags: ["Pagos"],
+      summary: "Estado de la compra de descarga del usuario sobre un diseño",
+      description:
+        "Solo considera descargas activas (pendiente_pago, pagada, completada) del usuario autenticado; prioriza la cobrada. comprado = true solo si está pagada o completada.",
+      security: cookieSession,
+      parameters: [
+        {
+          name: "disenoId",
+          in: "path",
+          required: true,
+          description: "ID del diseño",
+          schema: { type: "string", format: "uuid" },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Estado de la compra",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  comprado: { type: "boolean" },
+                  compraId: { type: "string", format: "uuid", nullable: true },
+                  estado: {
+                    type: "string",
+                    nullable: true,
+                    enum: ["pendiente_pago", "pagada", "completada", null],
+                  },
+                },
+              },
+            },
+          },
+        },
+        400: err("disenoId inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
       },
     },
   },
@@ -220,7 +264,7 @@ export const pagoPaths = {
       summary: "Nuevo intento de pago de una compra pendiente",
       description:
         "Para reintentar (preference vencida o abandonada) o, en fabricación, cuando cerró el fabricante el trato. Solo el comprador dueño. En fabricación exige trato cerrado y monto igual al precio acordado.",
-      security: bearer,
+      security: cookieSession,
       parameters: [uuidParam("ID de la compra")],
       responses: {
         201: {
@@ -237,14 +281,54 @@ export const pagoPaths = {
             },
           },
         },
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         403: err("La compra no es del usuario"),
         404: err("Compra no encontrada"),
         409: err(
-          "La compra no está pendiente de pago o el trato no está cerrado",
+          "La compra no está pendiente de pago (p. ej. cancelada) o el trato no está cerrado",
         ),
         502: err("No se pudo crear la preference en Mercado Pago"),
         503: err("Pagos no configurados"),
+      },
+    },
+  },
+  "/compras/{id}/cancelar": {
+    post: {
+      tags: ["Pagos"],
+      summary: "Cancelar una compra pendiente de pago",
+      description:
+        "Solo el comprador dueño y solo con la compra en 'pendiente_pago' sin pagos aprobados. La compra pasa a 'cancelada' (deja de aparecer en mis-compras), sus intentos de pago pendientes quedan 'rechazado' y un cobro tardío de Mercado Pago sobre esa preference se reembolsa automáticamente (nunca se acredita). En fabricación cancela todas las órdenes abiertas (solicitado, en_negociacion, trato_cerrado) y publica un mensaje de sistema en cada conversación (eventos socket 'orden-cancelada' y 'notificacion-mensaje').",
+      security: cookieSession,
+      parameters: [uuidParam("ID de la compra")],
+      responses: {
+        200: {
+          description: "Compra cancelada",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  message: { type: "string", example: "Compra cancelada" },
+                  data: {
+                    type: "object",
+                    properties: {
+                      compraId: { type: "string", format: "uuid" },
+                      estado: { type: "string", enum: ["cancelada"] },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        400: err("id inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
+        403: err("La compra no es del usuario"),
+        404: err("Compra no encontrada"),
+        409: err(
+          "code COMPRA_NO_CANCELABLE: la compra no está 'pendiente_pago' o ya tiene un pago aprobado",
+        ),
+        429: err("Demasiados intentos"),
       },
     },
   },
@@ -254,7 +338,7 @@ export const pagoPaths = {
       summary: "Estado de la compra y de su último pago",
       description:
         "Solo el dueño de la compra. El front lo consulta al volver de Checkout Pro (la fuente de verdad es el webhook, no el redirect).",
-      security: bearer,
+      security: cookieSession,
       parameters: [uuidParam("ID de la compra")],
       responses: {
         200: {
@@ -265,7 +349,7 @@ export const pagoPaths = {
             },
           },
         },
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         403: err("La compra no es del usuario"),
         404: err("Compra no encontrada"),
       },
@@ -334,7 +418,7 @@ export const pagoPaths = {
       summary: "Billetera del usuario autenticado",
       description:
         "Movimientos propios (retenido, pendiente_payout, pagado) paginados y resumen en centavos. Nunca expone movimientos de otros usuarios ni de la plataforma.",
-      security: bearer,
+      security: cookieSession,
       parameters: [
         {
           name: "page",
@@ -365,17 +449,17 @@ export const pagoPaths = {
           },
         },
         400: err("Parámetros inválidos"),
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
       },
     },
   },
   "/ordenes-fabricacion/{id}/cerrar-trato": {
     post: {
       tags: ["Fabricación"],
-      summary: "Confirmar el cierre del trato con un precio",
+      summary: "Aceptar el presupuesto del fabricante (solo comprador)",
       description:
-        "Cuando ambas partes confirman el mismo precio el trato se cierra: se fija el monto de la compra y se cancelan las órdenes hermanas. Si cierra el comprador, la respuesta incluye el initPoint de Checkout Pro para pagar el precio acordado; si cierra el fabricante, el comprador usa POST /compras/{id}/pagar.",
-      security: bearer,
+        "Solo el comprador. Acepta el último precio propuesto por el fabricante (precio_propuesto_fabricante) y cierra el trato en el acto, sin confirmación del fabricante: la orden pasa a trato_cerrado, se fija el monto de la compra, se cancelan las órdenes hermanas, se genera el código de entrega y se emite 'deal-closed'. `precio` debe coincidir con la propuesta vigente (evita aceptar un monto desactualizado). La respuesta incluye el initPoint de Checkout Pro; si es null, el comprador usa POST /compras/{id}/pagar. El fabricante solo propone precio con POST /ordenes-fabricacion/{id}/proponer-precio; el comprador puede contraofertar por esa vía, pero eso no cierra el trato.",
+      security: cookieSession,
       parameters: [uuidParam("ID de la orden de fabricación")],
       requestBody: {
         required: true,
@@ -387,7 +471,8 @@ export const pagoPaths = {
               properties: {
                 precio: {
                   type: "number",
-                  description: "Pesos, hasta 2 decimales",
+                  description:
+                    "Pesos, hasta 2 decimales; debe ser igual al presupuesto vigente del fabricante",
                   example: 10000,
                 },
               },
@@ -397,30 +482,36 @@ export const pagoPaths = {
       },
       responses: {
         200: {
-          description: "Confirmación registrada",
+          description: "Presupuesto aceptado, trato cerrado",
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
-                  message: { type: "string" },
+                  message: {
+                    type: "string",
+                    example: "Presupuesto aceptado, trato cerrado",
+                  },
                   data: {
                     type: "object",
-                    description: "Orden de fabricación (incluye compraEstado)",
+                    description:
+                      "Orden de fabricación (estado trato_cerrado, cerradoPorComprador y cerradoPorFabricante en true)",
                   },
-                  pagoRequerido: {
-                    type: "boolean",
-                    description: "true si este cierre finalizó el trato",
-                  },
+                  pagoRequerido: { type: "boolean", example: true },
                   initPoint: { type: "string", nullable: true },
                 },
               },
             },
           },
         },
-        400: err("Datos inválidos"),
-        403: err("No participa de la orden"),
-        409: err("La orden o la compra ya no admiten el cierre"),
+        400: err("Datos inválidos o diseño en categoría de planos técnicos"),
+        403: err(
+          "No participa de la orden, o es el fabricante: 'Solo el comprador puede aceptar el presupuesto'",
+        ),
+        404: err("Orden de fabricación no encontrada"),
+        409: err(
+          "code SIN_PRESUPUESTO (el fabricante no propuso precio), code PRESUPUESTO_DESACTUALIZADO (precio distinto al vigente), trato ya cerrado, o la orden/compra ya no admiten el cierre",
+        ),
       },
     },
   },
@@ -430,7 +521,7 @@ export const pagoPaths = {
       summary: "Cancelar una orden antes de declararse la entrega",
       description:
         "Con trato cerrado y pago acreditado, la compra pasa a 'cancelada' y se reembolsa el pago en Mercado Pago. 'reembolso' = no_aplica | reembolsado | pendiente (pendiente se reintenta desde el panel admin).",
-      security: bearer,
+      security: cookieSession,
       parameters: [uuidParam("ID de la orden de fabricación")],
       responses: {
         200: {
@@ -461,7 +552,7 @@ export const pagoPaths = {
     get: {
       tags: ["Admin"],
       summary: "Payouts pendientes de transferir a vendedores",
-      security: bearer,
+      security: cookieSession,
       parameters: [
         { name: "page", in: "query", schema: { type: "integer", default: 1 } },
         {
@@ -488,7 +579,7 @@ export const pagoPaths = {
             },
           },
         },
-        401: err("Token ausente o inválido"),
+        401: err("Sesión (cookie mec3d_session) ausente o inválida"),
         403: err("Requiere rol admin"),
       },
     },
@@ -497,7 +588,7 @@ export const pagoPaths = {
     post: {
       tags: ["Admin"],
       summary: "Registrar un payout manual ya transferido",
-      security: bearer,
+      security: cookieSession,
       parameters: [uuidParam("ID del movimiento")],
       requestBody: {
         required: true,
@@ -530,7 +621,7 @@ export const pagoPaths = {
     post: {
       tags: ["Admin"],
       summary: "Reintentar los reembolsos que no se pudieron confirmar en MP",
-      security: bearer,
+      security: cookieSession,
       responses: {
         200: {
           description: "Resumen del reintento",

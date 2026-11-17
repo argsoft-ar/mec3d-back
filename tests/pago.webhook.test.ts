@@ -4,13 +4,15 @@ import crypto from "crypto";
 const mockPaymentGet = jest.fn();
 const mockRefundTotal = jest.fn();
 const mockPreferenceCreate = jest.fn();
+const mockPreferenceUpdate = jest.fn();
+const mockPaymentSearch = jest.fn();
 const mockClient = { query: jest.fn() };
 
 jest.mock("../src/config/mercadopago.config", () => ({
   getMercadoPagoClients: () => ({
-    payment: { get: mockPaymentGet },
+    payment: { get: mockPaymentGet, search: mockPaymentSearch },
     refund: { total: mockRefundTotal },
-    preference: { create: mockPreferenceCreate },
+    preference: { create: mockPreferenceCreate, update: mockPreferenceUpdate },
   }),
 }));
 jest.mock("../src/utils/transaction.util", () => ({
@@ -51,6 +53,7 @@ jest.mock("../src/repositories/pago.repository", () => ({
     marcarReembolsadoSinAprobar: jest.fn(),
     marcarRevisionAdmin: jest.fn(),
     actualizarMpStatus: jest.fn(),
+    listarComprasParaReconciliar: jest.fn(),
   },
 }));
 jest.mock("../src/repositories/movimiento.repository", () => ({
@@ -702,6 +705,48 @@ describe("procesarWebhook: pago aprobado", () => {
       requestOptions: { idempotencyKey: `mec3d-refund-${PAGO_ID}` },
     });
   });
+
+  it("compra cancelada por el comprador (pago local 'rechazado'): un approved tardío no acredita y se reembolsa", async () => {
+    mk(compraRepository.lockById).mockResolvedValue({
+      ...compraBase,
+      tipo: "fabricacion",
+      estado: "cancelada",
+    });
+    mk(pagoRepository.lockById)
+      .mockResolvedValueOnce({ ...pagoBase, estado: "rechazado" })
+      .mockImplementation(async (_c, id) => ({
+        ...pagoBase,
+        id,
+        mp_payment_id: MP_ID,
+        estado: "aprobado",
+      }));
+    mockRefundTotal.mockResolvedValue({ id: 32 });
+    mk(pagoRepository.getById).mockResolvedValue({
+      ...pagoBase,
+      mp_payment_id: MP_ID,
+      estado: "aprobado",
+    });
+    mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
+    mk(movimientoRepository.existeRetencion).mockResolvedValue(false);
+    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({
+      revertidos: 0,
+      yaPagados: 0,
+    });
+
+    await pagoService.procesarWebhook(webhook());
+
+    expect(compraRepository.marcarPagada).not.toHaveBeenCalled();
+    expect(movimientoRepository.insertar).not.toHaveBeenCalled();
+    expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      "compra_cancelada",
+    );
+    expect(mockRefundTotal).toHaveBeenCalledWith({
+      payment_id: MP_ID,
+      requestOptions: { idempotencyKey: `mec3d-refund-${PAGO_ID}` },
+    });
+  });
 });
 
 describe("procesarWebhook: otros estados de MP", () => {
@@ -877,5 +922,111 @@ describe("reembolsar", () => {
     await expect(pagoService.reembolsar(PAGO_ID)).rejects.toThrow(
       "Solo se puede reembolsar un pago aprobado",
     );
+  });
+});
+
+describe("reconciliarPagosPendientes: compra cancelada con cobro tardío", () => {
+  beforeEach(() => {
+    mk(pagoRepository.listarComprasParaReconciliar).mockResolvedValue([
+      COMPRA_ID,
+    ]);
+    mockPaymentSearch.mockResolvedValue({ results: [{ id: Number(MP_ID) }] });
+    mk(compraRepository.lockById).mockResolvedValue({
+      ...compraBase,
+      estado: "cancelada",
+    });
+  });
+
+  it("encuentra el approved perdido y lo reembolsa sin acreditar el ledger", async () => {
+    mk(pagoRepository.lockById)
+      .mockResolvedValueOnce({ ...pagoBase, estado: "rechazado" })
+      .mockImplementation(async (_c, id) => ({
+        ...pagoBase,
+        id,
+        mp_payment_id: MP_ID,
+        estado: "aprobado",
+      }));
+    mk(pagoRepository.getById).mockResolvedValue({
+      ...pagoBase,
+      mp_payment_id: MP_ID,
+      estado: "aprobado",
+    });
+    mk(pagoRepository.marcarReembolsado).mockResolvedValue(true);
+    mk(movimientoRepository.existeRetencion).mockResolvedValue(false);
+    mk(movimientoRepository.reembolsarPorPago).mockResolvedValue({
+      revertidos: 0,
+      yaPagados: 0,
+    });
+    mockRefundTotal.mockResolvedValue({ id: 41 });
+
+    const r = await pagoService.reconciliarPagosPendientes();
+
+    expect(r).toEqual({ revisadas: 1, acreditados: 0, errores: 0 });
+    expect(mockPaymentSearch).toHaveBeenCalledWith({
+      options: expect.objectContaining({
+        external_reference: COMPRA_ID,
+        status: "approved",
+      }),
+    });
+    expect(compraRepository.marcarPagada).not.toHaveBeenCalled();
+    expect(movimientoRepository.insertar).not.toHaveBeenCalled();
+    expect(compraRepository.marcarReembolsada).not.toHaveBeenCalled();
+    expect(pagoRepository.marcarReembolsoPendiente).toHaveBeenCalledWith(
+      mockClient,
+      PAGO_ID,
+      "compra_cancelada",
+    );
+    expect(mockRefundTotal).toHaveBeenCalledWith({
+      payment_id: MP_ID,
+      requestOptions: { idempotencyKey: `mec3d-refund-${PAGO_ID}` },
+    });
+  });
+
+  it("es idempotente: un pago ya reembolsado no se vuelve a aprobar ni a devolver", async () => {
+    mk(pagoRepository.lockByMpPaymentId).mockResolvedValue({
+      ...pagoBase,
+      mp_payment_id: MP_ID,
+      estado: "reembolsado",
+    });
+
+    const r = await pagoService.reconciliarPagosPendientes();
+
+    expect(r).toEqual({ revisadas: 1, acreditados: 0, errores: 0 });
+    expect(pagoRepository.marcarAprobado).not.toHaveBeenCalled();
+    expect(pagoRepository.marcarReembolsoPendiente).not.toHaveBeenCalled();
+    expect(movimientoRepository.insertar).not.toHaveBeenCalled();
+    expect(mockRefundTotal).not.toHaveBeenCalled();
+  });
+});
+
+describe("expirarPreferences", () => {
+  it("vence cada preference en MP (expiration_date_to = ahora)", async () => {
+    mockPreferenceUpdate.mockResolvedValue({});
+    const antes = Date.now();
+    await pagoService.expirarPreferences(["pref-1", "pref-2"]);
+
+    expect(mockPreferenceUpdate).toHaveBeenCalledTimes(2);
+    const [{ id, updatePreferenceRequest }] =
+      mockPreferenceUpdate.mock.calls[0];
+    expect(id).toBe("pref-1");
+    expect(updatePreferenceRequest.expires).toBe(true);
+    const hasta = Date.parse(updatePreferenceRequest.expiration_date_to);
+    expect(hasta).toBeGreaterThanOrEqual(antes);
+    expect(hasta).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("un fallo de MP se loguea y no corta las siguientes ni lanza", async () => {
+    const error = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    mockPreferenceUpdate
+      .mockRejectedValueOnce(new Error("MP caído"))
+      .mockResolvedValueOnce({});
+
+    await expect(
+      pagoService.expirarPreferences(["pref-1", "pref-2"]),
+    ).resolves.toBeUndefined();
+    expect(mockPreferenceUpdate).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalled();
   });
 });

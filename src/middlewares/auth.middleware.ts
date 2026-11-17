@@ -1,16 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../utils/jwt.util";
+import { readSessionToken } from "../utils/session-cookie.util";
 import { userRepository } from "../repositories/user.repository";
 
+// La sesión viaja solo en la cookie HttpOnly mec3d_session (el header Authorization se ignora).
+// verifyToken exige audiencia "session": un token de socket no autentica requests HTTP.
 export const authenticateToken = (
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
-  const authHeader = req.headers["authorization"];
-
-  // El header usualmente tiene el formato: "Bearer <token>"
-  const token = authHeader?.split(" ")[1];
+  const token = readSessionToken(req);
 
   if (!token) {
     res.status(401).json({ error: "Acceso denegado. Token no proporcionado." });

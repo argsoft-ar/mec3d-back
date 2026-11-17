@@ -61,9 +61,67 @@ export interface OrdenFabricacionListItem extends OrdenFabricacion {
 export interface FabricanteSugerido {
   id: string;
   zonaId: number | null;
+  georefLocalidadId: string | null;
   puntuacion: number;
   tagline: string | null;
   username: string | null;
+}
+
+// Códigos ya normalizados (provincia 2 dígitos, departamento 5, localidad 8 u 11).
+export interface FiltroZonas {
+  provincias: string[];
+  departamentos: string[];
+  localidades: string[];
+}
+
+export interface DisenoEspecificacionesOrden {
+  dimensiones?: string;
+  dificultad?: string;
+  tiempoImpresion?: number;
+  soportes?: string;
+  configuracion?: {
+    layer?: string;
+    infill?: string;
+  };
+}
+
+// Nunca incluye archivoUrl: el archivo se obtiene por GET /ordenes-fabricacion/:id/descargar-diseno.
+export interface DisenoDeOrden {
+  id: string;
+  titulo: string;
+  descripcion: string | null;
+  imagenUrl: string | null;
+  previewUrl: string | null;
+  categoria: string | null;
+  tecnologia: string | null;
+  materiales: string[];
+  formato: string | null;
+  pesoGramos: number | null;
+  especificaciones: DisenoEspecificacionesOrden | null;
+}
+
+export interface OrdenDisenoResponse {
+  ordenId: string;
+  estado: EstadoOrdenFabricacion;
+  material: string | null;
+  diseno: DisenoDeOrden;
+  puedeDescargar: boolean;
+}
+
+export interface OrdenCerradaFabricanteItem {
+  id: string;
+  compraId: string;
+  estado: EstadoOrdenFabricacion;
+  disenoId: string;
+  disenoTitulo: string;
+  disenoImagenUrl: string | null;
+  compradorUsername: string | null;
+  // Pesos, igual que precioAcordado en OrdenFabricacion.
+  precioAcordado: number | null;
+  material: string | null;
+  fechaCierre: string | null;
+  actualizadoEn: string | null;
+  conversacionId: string | null;
 }
 
 export interface DisputaItem {
@@ -101,9 +159,9 @@ export interface CancelarOrdenResultado {
 
 export interface CerrarTratoResultado {
   orden: OrdenFabricacion;
-  // true cuando este cierre finalizó el trato y el comprador debe pagar el precio acordado.
+  // Siempre true: aceptar el presupuesto cierra el trato y el comprador debe pagar.
   pagoRequerido: boolean;
-  // Checkout Pro; solo si cerró el comprador y la preference se creó (si no: POST /compras/:id/pagar).
+  // Checkout Pro; null si la preference no se pudo crear (reintento: POST /compras/:id/pagar).
   initPoint: string | null;
 }
 

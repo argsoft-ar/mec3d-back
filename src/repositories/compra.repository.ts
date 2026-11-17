@@ -68,6 +68,36 @@ export const compraRepository = {
     return result.rows[0].existe;
   },
 
+  // Serializa, dentro de la transacción del caller, la creación de descargas de un mismo
+  // comprador + diseño (sin fila previa no hay nada que bloquear con FOR UPDATE).
+  async lockCompraDescarga(
+    db: Db,
+    compradorId: string,
+    disenoId: string,
+  ): Promise<void> {
+    await db.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2, 0));`,
+      [compradorId, disenoId],
+    );
+  },
+
+  // Descarga activa del comprador sobre el diseño: prioriza la cobrada sobre la pendiente.
+  async getCompraDescargaExistente(
+    compradorId: string,
+    disenoId: string,
+    db: Db = pool,
+  ): Promise<CompraRow | null> {
+    const result = await db.query<CompraRow>(
+      `SELECT ${COLUMNAS} FROM compras
+       WHERE id_comprador = $1 AND id_modelo = $2 AND tipo = 'descarga'
+         AND estado IN ('pendiente_pago', 'pagada', 'completada')
+       ORDER BY (estado <> 'pendiente_pago') DESC, fecha DESC
+       LIMIT 1;`,
+      [compradorId, disenoId],
+    );
+    return result.rows[0] ?? null;
+  },
+
   async getMisCompras(compradorId: string) {
     const query = `
       SELECT
@@ -87,7 +117,7 @@ export const compraRepository = {
         ORDER BY creado_en DESC
         LIMIT 1
       ) orden ON true
-      WHERE c.id_comprador = $1
+      WHERE c.id_comprador = $1 AND c.estado <> 'cancelada'
       ORDER BY c.fecha DESC;
     `;
     const result = await pool.query(query, [compradorId]);
@@ -125,6 +155,20 @@ export const compraRepository = {
       [id, montoCentavos],
     );
     return result.rowCount === 1;
+  },
+
+  async setMontoDescargaPendiente(
+    db: Db,
+    id: string,
+    montoCentavos: number,
+  ): Promise<CompraRow | null> {
+    const result = await db.query<CompraRow>(
+      `UPDATE compras SET monto_centavos = $2
+       WHERE id = $1 AND tipo = 'descarga' AND estado = 'pendiente_pago'
+       RETURNING ${COLUMNAS};`,
+      [id, montoCentavos],
+    );
+    return result.rows[0] ?? null;
   },
 
   async marcarPagada(db: Db, id: string): Promise<boolean> {

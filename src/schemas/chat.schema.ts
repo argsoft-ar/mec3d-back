@@ -7,3 +7,9 @@ export const listarMensajesSchema = z.object({
   }),
   query: paginationSchema.shape.query,
 });
+
+export const conversacionIdSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("El ID debe ser un UUID válido"),
+  }),
+});

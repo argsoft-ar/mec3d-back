@@ -37,5 +37,47 @@ export interface ConversacionResumen {
   precioPropuestoComprador: number | null;
   precioPropuestoFabricante: number | null;
   ultimoMensaje: { contenido: string; creadoEn: string } | null;
+  noLeidos: number;
   creadoEn: string;
+}
+
+// Fila devuelta por chatRepository.crearMensaje: mensaje + participantes para notificar.
+export interface MensajeCreadoRow {
+  id: string;
+  conversacion_id: string;
+  remitente_id: string | null;
+  contenido: string;
+  tipo: TipoMensaje;
+  creado_en: string;
+  comprador_id?: string;
+  fabricante_id?: string;
+  remitente_username?: string | null;
+}
+
+// Evento socket "notificacion-mensaje" (room user:<id>).
+export interface NotificacionMensaje {
+  conversacionId: string;
+  mensajeId: string;
+  remitenteUsername: string | null;
+  preview: string;
+  tipo: TipoMensaje;
+  creadoEn: string;
+}
+
+// Evento socket "nueva-solicitud-fabricacion" (room user:<fabricanteId>).
+export interface NuevaSolicitudFabricacion {
+  ordenId: string;
+  conversacionId: string;
+  disenoId: string;
+  disenoTitulo: string;
+  compradorUsername: string | null;
+}
+
+export interface NoLeidosTotal {
+  total: number;
+}
+
+export interface ConversacionLeida {
+  conversacionId: string;
+  noLeidos: 0;
 }

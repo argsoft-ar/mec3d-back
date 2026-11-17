@@ -91,10 +91,28 @@ export const usuarioService = {
   // Atómico: el rol y la limpieza de datos de fabricante se aplican juntos. No se permite
   // cambiar de rol con órdenes en curso ni con fondos retenidos o payouts pendientes, que
   // quedarían huérfanos de la función que los respalda.
-  async changeRol(userId: string, rol: string): Promise<any> {
+  // `rolRequerido`: el endpoint solo aplica a quien tiene hoy ese rol (DELETE /usuarios/fabricante).
+  // El rol admin no se gestiona por autoservicio: lo asigna db:bootstrap y es la única cuenta que
+  // resuelve disputas y payouts, así que nunca se cambia (ni se pierde) por estos endpoints.
+  async changeRol(
+    userId: string,
+    rol: string,
+    opts: { rolRequerido?: string } = {},
+  ): Promise<any> {
     return withTransaction(async (client) => {
       const actual = await userRepository.lockRolById(client, userId);
       if (!actual) throw new NotFoundError("Usuario no encontrado");
+
+      if (actual.rol_principal === "admin") {
+        throw new ForbiddenError(
+          "El rol de administrador no puede modificarse desde la cuenta",
+        );
+      }
+      if (opts.rolRequerido && actual.rol_principal !== opts.rolRequerido) {
+        throw new ForbiddenError(
+          `Esta acción solo está disponible para el rol ${opts.rolRequerido}`,
+        );
+      }
 
       if (actual.rol_principal !== rol) {
         if (await userRepository.tieneOrdenesActivas(client, userId)) {

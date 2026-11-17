@@ -164,5 +164,8 @@ const main = async () => {
 };
 
 if (require.main === module) {
-  void main();
+  main().catch((err) => {
+    console.error("❌ Error inesperado en db:bootstrap:", err);
+    process.exit(1);
+  });
 }

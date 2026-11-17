@@ -42,9 +42,14 @@ services:
         sync: false
       - key: JWT_EXPIRES_IN
         value: 1d
-      # URL del frontend en Vercel (producción)
+      # URL del frontend en Vercel (producción). También es la allowlist del chequeo CSRF de Origin.
       - key: CORS_ORIGIN
         sync: false
+      # El front proxya /api/* desde Vercel: cliente → Vercel → proxy de Render → app. Con 2,
+      # req.ip es la IP del cliente (X-Forwarded-For de Vercel) y el rate limit no se comparte
+      # entre todos los usuarios detrás del edge de Vercel. Con 1 sería la IP de Vercel.
+      - key: TRUST_PROXY
+        value: "2"
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY

@@ -91,6 +91,7 @@ describe("preview anterior leído dentro de la transacción de escritura", () =>
     titulo: "Pieza",
     archivoUrl: URL,
     precioBase: 10,
+    pesoGramos: 20,
     categoriaId: null,
     tecnologiaId: null,
     materialIds: [1],

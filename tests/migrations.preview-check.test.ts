@@ -5,8 +5,10 @@ import { PREVIEW_KEY_REGEX } from "../src/services/archivo.service";
 describe("migración 7: CHECK de preview_url", () => {
   const m7 = MIGRATIONS.find((m) => m.version === 7);
 
-  it("es la última, sin tocar las versiones 1-6 ya aplicadas", () => {
-    expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  it("no toca las versiones 1-6 ya aplicadas", () => {
+    expect(MIGRATIONS.map((m) => m.version)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
+    ]);
     expect(MIGRATIONS[5].sql).toBe(
       "ALTER TABLE disenos ADD COLUMN IF NOT EXISTS preview_url TEXT NULL;",
     );

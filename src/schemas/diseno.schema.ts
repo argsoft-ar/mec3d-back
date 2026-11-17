@@ -6,6 +6,7 @@ import {
   MSG_FORMATO_PLANO,
   validarArchivoSegunCategoria,
 } from "../utils/plano.util";
+import { quitarBarrasFinales } from "../utils/url.util";
 
 export type AssetKind = "archivo" | "imagen";
 
@@ -74,7 +75,7 @@ export function isAllowedAssetUrl(
   if (kind === "archivo") {
     const r2 = env.R2_PUBLIC_URL ? parseUrl(env.R2_PUBLIC_URL) : null;
     if (!r2 || url.origin !== r2.origin) return false;
-    const basePath = r2.pathname.replace(/\/+$/, "");
+    const basePath = quitarBarrasFinales(r2.pathname);
     return url.pathname.startsWith(`${basePath}${R2_MODELOS_PREFIX}`);
   }
 
@@ -121,6 +122,7 @@ export const MAX_PRINT_HOURS = 500;
 // DECIMAL(10,2) admite hasta 99.999.999,99; se deja un tope comercial mucho menor.
 export const MAX_PRECIO_BASE = 10_000_000;
 export const MAX_MATERIALES_POR_DISENO = 20;
+export const MAX_PESO_GRAMOS = 1_000_000;
 
 // Precio en pesos (precioBase y precios de negociación): finito, positivo, con tope y a lo
 // sumo 2 decimales para que el pasaje a centavos enteros sea exacto.
@@ -191,6 +193,11 @@ const productFieldsSchema = z.object({
     "El archivo URL debe ser válido y es obligatorio",
   ),
   precioBase: precioPesosSchema,
+  pesoGramos: z
+    .number({ error: "El peso debe ser un número de gramos" })
+    .int("El peso debe ser un número entero de gramos")
+    .positive("El peso debe ser mayor a 0")
+    .max(MAX_PESO_GRAMOS, `El peso máximo es ${MAX_PESO_GRAMOS} gramos`),
   formato: z
     .string()
     .max(50, "El formato no puede superar 50 caracteres")

@@ -5,6 +5,7 @@ const COLUMN_MAP: Record<string, string> = {
   imagenUrl: "imagen_url",
   archivoUrl: "archivo_url",
   precioBase: "precio_base",
+  pesoGramos: "peso_gramos",
   tecnologiaId: "tecnologia_id",
   categoriaId: "categoria_id",
 };
@@ -21,6 +22,7 @@ const PARTIAL_UPDATE_ALLOWED_KEYS = new Set([
   "imagenUrl",
   "archivoUrl",
   "precioBase",
+  "pesoGramos",
   "formato",
   "especificaciones",
   "tecnologiaId",
@@ -111,7 +113,7 @@ export const disenoRepository = {
     const query = `
       SELECT
         d.id, d.titulo, d.descripcion, d.imagen_url, d.rating,
-        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        d.review_count, d.descargas, d.precio_base, d.peso_gramos, d.formato, d.especificaciones,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
         u.zona_id AS designer_zona_id,
@@ -143,7 +145,7 @@ export const disenoRepository = {
     const query = `
       SELECT
         d.id, d.titulo, d.descripcion, d.imagen_url, ${opts.incluirArchivo ? "d.archivo_url," : ""} d.rating,
-        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        d.review_count, d.descargas, d.precio_base, d.peso_gramos, d.formato, d.especificaciones,
         d.disenador_id,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
@@ -169,6 +171,7 @@ export const disenoRepository = {
     imagenUrl?: string;
     archivoUrl: string;
     precioBase: number;
+    pesoGramos: number;
     formato?: string;
     especificaciones?: DisenoEspecificaciones;
     categoriaId: number | null;
@@ -180,9 +183,9 @@ export const disenoRepository = {
         INSERT INTO disenos (
           disenador_id, titulo, descripcion, imagen_url, 
           archivo_url, precio_base, formato, especificaciones, categoria_id,
-          tecnologia_id
+          tecnologia_id, peso_gramos
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *;
       `;
       const values = [
@@ -198,6 +201,7 @@ export const disenoRepository = {
           : null,
         productData.categoriaId,
         productData.tecnologiaId,
+        productData.pesoGramos,
       ];
       const result = await client.query(query, values);
       const row = result.rows[0];
@@ -216,6 +220,7 @@ export const disenoRepository = {
       imagenUrl?: string;
       archivoUrl: string;
       precioBase: number;
+      pesoGramos: number;
       formato?: string;
       especificaciones?: DisenoEspecificaciones;
       categoriaId: number | null;
@@ -233,7 +238,7 @@ export const disenoRepository = {
             preview_url = CASE WHEN archivo_url IS DISTINCT FROM $4 THEN NULL ELSE preview_url END,
             archivo_url = $4,
             precio_base = $5, formato = $6, especificaciones = $7, categoria_id = $8,
-            tecnologia_id = $9
+            tecnologia_id = $9, peso_gramos = $12
         WHERE id = $10 AND disenador_id = $11 AND eliminado_en IS NULL
         RETURNING *;
       `;
@@ -251,6 +256,7 @@ export const disenoRepository = {
         productData.tecnologiaId,
         id,
         disenadorId,
+        productData.pesoGramos,
       ];
       const result = await client.query(query, values);
       const row = result.rows[0];
@@ -403,9 +409,7 @@ export const disenoRepository = {
   },
 
   // Único lector de preview_url para el endpoint público: nunca selecciona archivo_url.
-  async getPreviewPublico(
-    id: string,
-  ): Promise<{
+  async getPreviewPublico(id: string): Promise<{
     preview_url: string | null;
     categoria_nombre: string | null;
   } | null> {
@@ -495,7 +499,7 @@ export const disenoRepository = {
     const query = `
       SELECT
         d.id, d.titulo, d.descripcion, d.imagen_url, d.archivo_url, d.rating,
-        d.review_count, d.descargas, d.precio_base, d.formato, d.especificaciones,
+        d.review_count, d.descargas, d.precio_base, d.peso_gramos, d.formato, d.especificaciones,
         u.id AS designer_id,
         u.tagline AS designer_tagline,
         u.zona_id AS designer_zona_id,

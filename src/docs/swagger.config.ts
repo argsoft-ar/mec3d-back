@@ -8,6 +8,10 @@ import { productPaths } from "./product.docs";
 import { uploadPaths } from "./upload.docs";
 import { catalogoPaths } from "./catalogo.docs";
 import { pagoPaths, pagoSchemaDoc } from "./pago.docs";
+import {
+  ordenFabricacionPaths,
+  ordenFabricacionSchemaDoc,
+} from "./orden-fabricacion.docs";
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -29,10 +33,12 @@ const options: swaggerJsdoc.Options = {
     ],
     components: {
       securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT",
+        // Sesión en cookie HttpOnly emitida por /auth/login, /auth/registro y PATCH /usuarios/rol.
+        // Las requests que modifican estado además exigen un Origin permitido (CSRF).
+        cookieAuth: {
+          type: "apiKey",
+          in: "cookie",
+          name: "mec3d_session",
         },
       },
       schemas: {
@@ -41,6 +47,7 @@ const options: swaggerJsdoc.Options = {
         ...errorSchemaDoc,
         ...paginationSchemaDoc,
         ...pagoSchemaDoc,
+        ...ordenFabricacionSchemaDoc,
       },
     },
     paths: {
@@ -49,6 +56,7 @@ const options: swaggerJsdoc.Options = {
       ...uploadPaths,
       ...catalogoPaths,
       ...pagoPaths,
+      ...ordenFabricacionPaths,
     },
   },
   apis: [],

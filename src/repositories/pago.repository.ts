@@ -106,6 +106,29 @@ export const pagoRepository = {
     return result.rows[0] ?? null;
   },
 
+  // Todos los pagos de la compra, bloqueados (la compra ya debe estar bloqueada).
+  async lockPorCompra(db: Db, compraId: string): Promise<PagoRow[]> {
+    const result = await db.query<PagoRow>(
+      `SELECT ${COLUMNAS} FROM pagos WHERE compra_id = $1
+       ORDER BY creado_en ASC
+       FOR UPDATE;`,
+      [compraId],
+    );
+    return result.rows;
+  },
+
+  // Cancelación de la compra: los intentos pendientes quedan 'rechazado'. Un cobro tardío de
+  // MP sobre esa preference cae en el camino de reembolso ('compra_cancelada').
+  async rechazarPendientesPorCompra(db: Db, compraId: string): Promise<number> {
+    const result = await db.query(
+      `UPDATE pagos
+       SET estado = 'rechazado', mp_status_detail = 'compra_cancelada', actualizado_en = now()
+       WHERE compra_id = $1 AND estado = 'pendiente';`,
+      [compraId],
+    );
+    return result.rowCount ?? 0;
+  },
+
   // Pago que respalda el ledger de la compra (a lo sumo uno: el resto son duplicados reembolsables).
   async lockAprobadoPrincipalPorCompra(
     db: Db,
@@ -284,8 +307,8 @@ export const pagoRepository = {
     return { rows: rows.rows, total: Number(total.rows[0].total) };
   },
 
-  // Compras 'pendiente_pago' con un intento de pago reciente que ya tuvo tiempo de acreditarse
-  // (más nuevas primero): candidatas a reconciliar contra MP por si se perdió el webhook.
+  // Compras 'pendiente_pago' (o canceladas con un intento rechazado, por un cobro tardío a reembolsar)
+  // con un intento de pago reciente: candidatas a reconciliar contra MP por si se perdió el webhook.
   async listarComprasParaReconciliar(
     limit: number,
     ventanaDias = 3,
@@ -295,7 +318,7 @@ export const pagoRepository = {
       `SELECT c.id AS compra_id
        FROM compras c
        JOIN pagos p ON p.compra_id = c.id
-       WHERE c.estado = 'pendiente_pago'
+       WHERE (c.estado = 'pendiente_pago' OR (c.estado = 'cancelada' AND p.estado = 'rechazado'))
          AND p.mp_preference_id IS NOT NULL
          AND p.creado_en > now() - make_interval(days => $2)
          AND p.creado_en < now() - make_interval(mins => $3)

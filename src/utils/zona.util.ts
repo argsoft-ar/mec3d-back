@@ -1,3 +1,5 @@
+import { FiltroZonas } from "../interfaces/orden-fabricacion.interface";
+
 /**
  * Utilidades para trabajar con códigos INDEC de zonas (localidades/departamentos).
  *
@@ -27,4 +29,23 @@ export function getPartidoPrefix(zonaId: number): string | null {
   if (codigo.length === 8) return codigo.substring(0, 5);
   if (codigo.length === 7) return `0${codigo.substring(0, 4)}`;
   return null;
+}
+
+/**
+ * Semántica de refinamiento del filtro de zonas (códigos ya normalizados): un nivel más
+ * específico reemplaza a su ancestro. Se descarta la provincia que contenga algún
+ * departamento o localidad elegidos, y el departamento que contenga alguna localidad
+ * (censal de 8 o Georef de 11 dígitos). Lo que queda se combina con OR.
+ */
+export function refinarZonas(zonas: FiltroZonas): FiltroZonas {
+  const { provincias, departamentos, localidades } = zonas;
+  const contiene = (prefijo: string, codigos: string[]) =>
+    codigos.some((c) => c.startsWith(prefijo));
+  return {
+    provincias: provincias.filter(
+      (p) => !contiene(p, departamentos) && !contiene(p, localidades),
+    ),
+    departamentos: departamentos.filter((d) => !contiene(d, localidades)),
+    localidades: [...localidades],
+  };
 }

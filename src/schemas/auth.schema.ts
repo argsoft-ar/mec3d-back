@@ -54,6 +54,12 @@ export const loginSchema = z.object({
   }),
 });
 
+// Endpoints de sesión sin entrada: el body (si viene) se descarta. Las claves desconocidas
+// se eliminan (strip) en lugar de rechazarse para no romper clientes que envían `{}`.
+export const emptyRequestSchema = z.object({
+  body: z.object({}).optional(),
+});
+
 // Schema para que admins creen usuarios (incluye rol admin)
 export const adminCreateUserSchema = z.object({
   body: z.object({

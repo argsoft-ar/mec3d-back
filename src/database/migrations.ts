@@ -94,6 +94,60 @@ const PREVIEW_URL_CHECK_MIGRATION_SQL = `
   $mig$;
 `;
 
+// Una sola compra de descarga activa por comprador + diseño.
+export const COMPRA_DESCARGA_ACTIVA_INDEX_SQL = `
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_compra_descarga_activa
+    ON compras (id_comprador, id_modelo)
+    WHERE tipo = 'descarga' AND estado IN ('pendiente_pago', 'pagada', 'completada');
+`;
+
+// Duplicados previos: se cancelan las descargas 'pendiente_pago' sobrantes (sin pago aprobado),
+// conservando la pagada o, si no hay, la pendiente más reciente. Nunca se tocan compras cobradas;
+// si aun así quedan duplicados (dos pagadas) se avisa y se omite el índice, como en v3.
+const COMPRA_DESCARGA_ACTIVA_MIGRATION_SQL = `
+  DO $mig$
+  BEGIN
+    WITH ranking AS (
+      SELECT c.id, c.estado,
+             row_number() OVER (
+               PARTITION BY c.id_comprador, c.id_modelo
+               ORDER BY (c.estado <> 'pendiente_pago') DESC, c.fecha DESC, c.id
+             ) AS rn
+      FROM compras c
+      WHERE c.tipo = 'descarga' AND c.estado IN ('pendiente_pago', 'pagada', 'completada')
+    )
+    UPDATE compras c SET estado = 'cancelada', cancelada_en = now()
+      FROM ranking r
+      WHERE c.id = r.id AND r.rn > 1 AND r.estado = 'pendiente_pago'
+        AND NOT EXISTS (
+          SELECT 1 FROM pagos p WHERE p.compra_id = c.id AND p.estado = 'aprobado'
+        );
+    IF EXISTS (
+      SELECT 1 FROM compras
+      WHERE tipo = 'descarga' AND estado IN ('pendiente_pago', 'pagada', 'completada')
+      GROUP BY id_comprador, id_modelo HAVING count(*) > 1
+    ) THEN
+      RAISE WARNING 'uq_compra_descarga_activa omitido: hay compras de descarga cobradas duplicadas; resolvelas y volvé a correr la migración';
+    ELSE
+      ${COMPRA_DESCARGA_ACTIVA_INDEX_SQL}
+    END IF;
+  END
+  $mig$;
+`;
+
+// Última lectura de cada participante por conversación (cálculo de mensajes no leídos).
+export const CONVERSACION_LECTURAS_SQL = `
+  CREATE TABLE IF NOT EXISTS conversacion_lecturas (
+    conversacion_id UUID NOT NULL,
+    usuario_id UUID NOT NULL,
+    ultima_lectura_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (conversacion_id, usuario_id),
+    CONSTRAINT fk_lectura_conversacion FOREIGN KEY (conversacion_id) REFERENCES conversaciones(id) ON DELETE CASCADE,
+    CONSTRAINT fk_lectura_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_conversacion_lecturas_usuario ON conversacion_lecturas (usuario_id);
+`;
+
 // 1 = esquema con ledger de pagos y código de entrega HMAC (anterior al versionado).
 // 2 = hardening: uploads, disputas, retención de payouts, cooldown de cuenta, reintentos de
 //     webhook, invariantes del ledger. Todas las sentencias son idempotentes.
@@ -102,6 +156,9 @@ const PREVIEW_URL_CHECK_MIGRATION_SQL = `
 // 5 = unicidad case-insensitive del nombre de categoría (el catálogo se resuelve con lower()).
 // 6 = disenos.preview_url: key en R2 del preview 3D degradado (público, vía URL firmada).
 // 7 = CHECK estricto de formato sobre disenos.preview_url (previews/<uuid>.stl).
+// 8 = disenos.peso_gramos, categorías 'Envases' y 'Piezas varias', una descarga activa por
+//     comprador + diseño.
+// 9 = conversacion_lecturas (mensajes no leídos) con backfill: lo histórico queda leído.
 export const MIGRATIONS: Migration[] = [
   { version: 1, nombre: "esquema_base", sql: "" },
   {
@@ -239,6 +296,38 @@ export const MIGRATIONS: Migration[] = [
     version: 7,
     nombre: "diseno_preview_url_check",
     sql: PREVIEW_URL_CHECK_MIGRATION_SQL,
+  },
+  {
+    version: 8,
+    nombre: "peso_categorias_descarga_unica",
+    sql: `
+      ALTER TABLE disenos ADD COLUMN IF NOT EXISTS peso_gramos INTEGER NULL;
+      ALTER TABLE disenos DROP CONSTRAINT IF EXISTS chk_diseno_peso_gramos;
+      ALTER TABLE disenos ADD CONSTRAINT chk_diseno_peso_gramos
+        CHECK (peso_gramos IS NULL OR peso_gramos > 0);
+
+      -- Sin target: cubre tanto UNIQUE (nombre) como uq_categorias_nombre_lower.
+      INSERT INTO categorias (nombre, descripcion) VALUES
+        ('Envases', 'Envases, frascos, tapas y contenedores'),
+        ('Piezas varias', 'Piezas y componentes de uso general')
+      ON CONFLICT DO NOTHING;
+
+      ${COMPRA_DESCARGA_ACTIVA_MIGRATION_SQL}
+    `,
+  },
+  {
+    version: 9,
+    nombre: "conversacion_lecturas",
+    sql: `
+      ${CONVERSACION_LECTURAS_SQL}
+      CREATE INDEX IF NOT EXISTS idx_mensajes_conversacion ON mensajes (conversacion_id, creado_en);
+
+      INSERT INTO conversacion_lecturas (conversacion_id, usuario_id, ultima_lectura_en)
+      SELECT id, comprador_id, now() FROM conversaciones
+      UNION
+      SELECT id, fabricante_id, now() FROM conversaciones
+      ON CONFLICT DO NOTHING;
+    `,
   },
 ];
 

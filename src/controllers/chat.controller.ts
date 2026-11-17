@@ -44,3 +44,47 @@ export const getMisConversaciones = async (
     next(error);
   }
 };
+
+export const getNoLeidos = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const data = await chatService.contarNoLeidos(userId);
+    res.status(200).json({
+      message: "Mensajes no leídos obtenidos exitosamente",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const marcarLeida = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "No autorizado" });
+      return;
+    }
+
+    const data = await chatService.marcarLeida(req.params.id, userId);
+    res.status(200).json({
+      message: "Conversación marcada como leída",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

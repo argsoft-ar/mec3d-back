@@ -17,3 +17,9 @@ export const crearCompraSchema = z.object({
       path: ["material"],
     }),
 });
+
+export const estadoCompraDisenoSchema = z.object({
+  params: z.object({
+    disenoId: z.string().uuid("disenoId debe ser un UUID válido"),
+  }),
+});

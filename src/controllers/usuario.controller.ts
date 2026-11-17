@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { usuarioService } from "../services/usuario.service";
+import { authService } from "../services/auth.service";
 import { UpdateProfileDTO } from "../interfaces/user.interface";
-import { generateToken } from "../utils/jwt.util";
 import type { TokenPayload } from "../interfaces/auth.interface";
+import { setSessionCookie } from "../utils/session-cookie.util";
 
 export const getMyProfile = async (
   req: Request,
@@ -96,8 +97,9 @@ export const changeMyRol = async (
       email: req.user!.email,
       rolPrincipal: rol as TokenPayload["rolPrincipal"],
     };
-    const token = generateToken(payload);
-    res.status(200).json({ ...result, token });
+    // La sesión se renueva con el rol nuevo vía cookie; el token ya no va en el body.
+    setSessionCookie(res, authService.createSessionToken(payload));
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -109,7 +111,20 @@ export const deleteFabricanteStatus = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    await usuarioService.changeRol(req.user!.id, "comprador");
+    // Solo un fabricante puede quitarse ese estado (antes cualquier rol, incluido admin,
+    // quedaba degradado a comprador).
+    await usuarioService.changeRol(req.user!.id, "comprador", {
+      rolRequerido: "fabricante",
+    });
+    // Mantiene el rol de la cookie en sincronía con la DB (antes el JWT quedaba desactualizado).
+    setSessionCookie(
+      res,
+      authService.createSessionToken({
+        id: req.user!.id,
+        email: req.user!.email,
+        rolPrincipal: "comprador",
+      }),
+    );
     res.status(200).json({ message: "Estado de fabricante eliminado" });
   } catch (error) {
     next(error);

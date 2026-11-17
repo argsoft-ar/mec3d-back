@@ -7,7 +7,11 @@ jest.mock("../src/repositories/diseno.repository", () => ({
   disenoRepository: { getById: jest.fn(), lockById: jest.fn() },
 }));
 jest.mock("../src/repositories/compra.repository", () => ({
-  compraRepository: { create: jest.fn() },
+  compraRepository: {
+    create: jest.fn(),
+    lockCompraDescarga: jest.fn(),
+    getCompraDescargaExistente: jest.fn(),
+  },
 }));
 jest.mock("../src/services/catalogo.service", () => ({
   catalogoService: { resolverMaterialDeDiseno: jest.fn() },
@@ -53,8 +57,14 @@ beforeEach(() => {
   jest.clearAllMocks();
   diseno.getById.mockResolvedValue(filaDiseno);
   diseno.lockById.mockResolvedValue(filaDiseno);
-  compras.create.mockImplementation(async (data) => filaCompra(data.tipo) as never);
-  pagos.iniciarPago.mockResolvedValue({ initPoint: "https://mp.example/pay" } as never);
+  compras.create.mockImplementation(
+    async (data) => filaCompra(data.tipo) as never,
+  );
+  compras.lockCompraDescarga.mockResolvedValue(undefined);
+  compras.getCompraDescargaExistente.mockResolvedValue(null);
+  pagos.iniciarPago.mockResolvedValue({
+    initPoint: "https://mp.example/pay",
+  } as never);
 });
 
 describe("compraService.crear: serialización con el cambio de categoría", () => {
@@ -102,5 +112,108 @@ describe("compraService.crear: serialización con el cambio de categoría", () =
     );
     expect(pagos.iniciarPago).toHaveBeenCalledWith("c1", COMPRADOR);
     expect(res.initPoint).toBe("https://mp.example/pay");
+  });
+});
+
+describe("compraService.crear: descargas duplicadas", () => {
+  const existente = (estado: string) => ({
+    ...filaCompra("descarga"),
+    id: "previa",
+    estado,
+    monto_centavos: "10000",
+  });
+
+  it("sin compra previa: toma el lock, crea la compra e inicia el pago", async () => {
+    const res = await compraService.crear(DISENO_ID, COMPRADOR, "descarga");
+
+    expect(compras.lockCompraDescarga).toHaveBeenCalledWith(
+      mockClient,
+      COMPRADOR,
+      DISENO_ID,
+    );
+    expect(compras.getCompraDescargaExistente).toHaveBeenCalledWith(
+      COMPRADOR,
+      DISENO_ID,
+      mockClient,
+    );
+    expect(compras.lockCompraDescarga.mock.invocationCallOrder[0]).toBeLessThan(
+      compras.getCompraDescargaExistente.mock.invocationCallOrder[0],
+    );
+    expect(compras.create).toHaveBeenCalledTimes(1);
+    expect(pagos.iniciarPago).toHaveBeenCalledWith("c1", COMPRADOR);
+    expect(res.compra.id).toBe("c1");
+  });
+
+  it.each(["pagada", "completada"])(
+    "ya %s: 409 COMPRA_DUPLICADA sin crear ni iniciar pago",
+    async (estado) => {
+      compras.getCompraDescargaExistente.mockResolvedValue(
+        existente(estado) as never,
+      );
+      await expect(
+        compraService.crear(DISENO_ID, COMPRADOR, "descarga"),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        code: "COMPRA_DUPLICADA",
+        message: "Ya compraste este diseño",
+      });
+      expect(compras.create).not.toHaveBeenCalled();
+      expect(pagos.iniciarPago).not.toHaveBeenCalled();
+    },
+  );
+
+  it("pendiente_pago: reutiliza la compra y reinicia el pago", async () => {
+    compras.getCompraDescargaExistente.mockResolvedValue(
+      existente("pendiente_pago") as never,
+    );
+    const res = await compraService.crear(DISENO_ID, COMPRADOR, "descarga");
+
+    expect(compras.create).not.toHaveBeenCalled();
+    expect(pagos.iniciarPago).toHaveBeenCalledWith("previa", COMPRADOR);
+    expect(res).toMatchObject({
+      compra: { id: "previa", estado: "pendiente_pago", montoCentavos: 10000 },
+      initPoint: "https://mp.example/pay",
+    });
+  });
+
+  it("violación del índice único (23505) se traduce a 409 COMPRA_DUPLICADA", async () => {
+    compras.create.mockRejectedValue(
+      Object.assign(new Error("duplicate key"), { code: "23505" }),
+    );
+    await expect(
+      compraService.crear(DISENO_ID, COMPRADOR, "descarga"),
+    ).rejects.toMatchObject({ statusCode: 409, code: "COMPRA_DUPLICADA" });
+  });
+
+  it("fabricación no consulta descargas previas", async () => {
+    await compraService.crear(DISENO_ID, COMPRADOR, "fabricacion");
+    expect(compras.lockCompraDescarga).not.toHaveBeenCalled();
+    expect(compras.getCompraDescargaExistente).not.toHaveBeenCalled();
+  });
+});
+
+describe("compraService.estadoDescarga", () => {
+  it("sin compra activa", async () => {
+    await expect(
+      compraService.estadoDescarga(DISENO_ID, COMPRADOR),
+    ).resolves.toEqual({ comprado: false, compraId: null, estado: null });
+  });
+
+  it.each([
+    ["pendiente_pago", false],
+    ["pagada", true],
+    ["completada", true],
+  ])("estado %s -> comprado %s", async (estado, comprado) => {
+    compras.getCompraDescargaExistente.mockResolvedValue({
+      ...filaCompra("descarga"),
+      estado,
+    } as never);
+    await expect(
+      compraService.estadoDescarga(DISENO_ID, COMPRADOR),
+    ).resolves.toEqual({ comprado, compraId: "c1", estado });
+    expect(compras.getCompraDescargaExistente).toHaveBeenCalledWith(
+      COMPRADOR,
+      DISENO_ID,
+    );
   });
 });

@@ -4,13 +4,18 @@ import {
   getMisCompras,
   descargarArchivo,
   pagarCompra,
+  cancelarCompra,
   getEstadoPago,
+  getEstadoCompraDiseno,
 } from "../controllers/compra.controller";
 import { authenticateToken } from "../middlewares/auth.middleware";
 import { pagoLimiter } from "../middlewares/rate-limit.middleware";
 import { validateSchema } from "../middlewares/validate.middleware";
 import { uuidParamSchema } from "../schemas/common.schema";
-import { crearCompraSchema } from "../schemas/compra.schema";
+import {
+  crearCompraSchema,
+  estadoCompraDisenoSchema,
+} from "../schemas/compra.schema";
 
 const router = Router();
 
@@ -26,6 +31,14 @@ router.post(
 // Listado de compras del comprador autenticado ("Mis Compras")
 router.get("/mis-compras", authenticateToken, getMisCompras);
 
+// Estado de la descarga del usuario sobre un diseño (antes de las rutas /:id)
+router.get(
+  "/diseno/:disenoId/estado",
+  authenticateToken,
+  validateSchema(estadoCompraDisenoSchema),
+  getEstadoCompraDiseno,
+);
+
 // Nuevo intento de pago de una compra 'pendiente_pago' (en fabricación, con el trato cerrado)
 router.post(
   "/:id/pagar",
@@ -33,6 +46,15 @@ router.post(
   pagoLimiter,
   validateSchema(uuidParamSchema),
   pagarCompra,
+);
+
+// El comprador cancela una compra 'pendiente_pago' (y, en fabricación, sus órdenes abiertas)
+router.post(
+  "/:id/cancelar",
+  authenticateToken,
+  pagoLimiter,
+  validateSchema(uuidParamSchema),
+  cancelarCompra,
 );
 
 // Estado de la compra y de su último pago (solo el dueño): el front lo consulta al volver de MP

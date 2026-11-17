@@ -34,6 +34,14 @@ export interface CrearCompraResultado {
   initPoint: string | null;
 }
 
+export interface EstadoCompraDescarga {
+  // true solo con la descarga pagada o completada.
+  comprado: boolean;
+  compraId: string | null;
+  // 'pendiente_pago' | 'pagada' | 'completada', o null sin compra activa.
+  estado: EstadoCompra | null;
+}
+
 export interface CompraDisenoInfo {
   titulo: string;
   imagenUrl: string | null;
@@ -44,4 +52,9 @@ export interface MisComprasItem extends Compra {
   diseno: CompraDisenoInfo;
   ordenFabricacionId: string | null;
   ordenFabricacionEstado: string | null;
+}
+
+export interface CancelarCompraResultado {
+  compraId: string;
+  estado: "cancelada";
 }

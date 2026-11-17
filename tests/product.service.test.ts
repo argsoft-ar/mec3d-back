@@ -76,6 +76,7 @@ const dtoModelo = {
   titulo: "Pieza",
   archivoUrl: `${base}/a.stl`,
   precioBase: 100,
+  pesoGramos: 80,
   formato: "STL",
   categoria: "Autos",
   tecnologia: "Impresión 3D",
@@ -124,6 +125,7 @@ describe("productService: coherencia archivoUrl / categoría / formato", () => {
           titulo: "Plano",
           archivoUrl: `${base}/a.pdf?x=1`,
           precioBase: 100,
+          pesoGramos: 10,
           formato: "DWG",
           categoria: "Planos técnicos",
         },
@@ -140,6 +142,7 @@ describe("productService: coherencia archivoUrl / categoría / formato", () => {
         titulo: "Plano",
         archivoUrl: `${base}/a.PDF`,
         precioBase: 100,
+        pesoGramos: 10,
         formato: "PDF",
         categoria: "Planos técnicos",
       },
@@ -234,6 +237,7 @@ describe("productService: cambio a Planos técnicos con fabricación en curso", 
           titulo: "Plano",
           archivoUrl: `${base}/p.pdf`,
           precioBase: 100,
+          pesoGramos: 10,
           formato: "PDF",
           categoria: "Planos técnicos",
         },
@@ -263,6 +267,22 @@ describe("productService: cambio a Planos técnicos con fabricación en curso", 
   });
 });
 
+describe("productService: pesoGramos", () => {
+  it("create persiste pesoGramos y lo expone en el producto", async () => {
+    diseno.getByIdWithDesigner.mockResolvedValue({ id: ID, peso_gramos: 80 });
+    const product = await productService.create(dtoModelo, USER);
+    expect(diseno.createProduct).toHaveBeenCalledWith(
+      expect.objectContaining({ pesoGramos: 80 }),
+    );
+    expect(product.pesoGramos).toBe(80);
+  });
+
+  it("un diseño previo sin peso expone pesoGramos null", async () => {
+    const product = await productService.getById(ID);
+    expect(product?.pesoGramos).toBeNull();
+  });
+});
+
 describe("productService: generación del preview 3D", () => {
   const preview = previewService as jest.Mocked<typeof previewService>;
 
@@ -282,6 +302,7 @@ describe("productService: generación del preview 3D", () => {
         titulo: "Plano",
         archivoUrl: `${base}/a.pdf`,
         precioBase: 100,
+        pesoGramos: 10,
         formato: "PDF",
         categoria: "Planos técnicos",
       },
@@ -432,6 +453,7 @@ describe("productService: generación del preview 3D", () => {
           titulo: "Plano",
           archivoUrl: `${base}/p.pdf`,
           precioBase: 100,
+          pesoGramos: 10,
           formato: "PDF",
           categoria: "Planos técnicos",
         },

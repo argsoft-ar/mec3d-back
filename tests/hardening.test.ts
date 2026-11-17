@@ -123,6 +123,7 @@ describe("allowlist de URLs de assets", () => {
       const base = {
         titulo: "Engranaje",
         precioBase: 100,
+        pesoGramos: 50,
         tecnologia: "Impresión 3D",
         materiales: ["PLA"],
       };

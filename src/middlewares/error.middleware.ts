@@ -62,9 +62,10 @@ export const errorHandler = (
 
   // Si es un error operacional conocido (AppError)
   if (err instanceof AppError) {
-    const response: { error: string; details?: unknown } = {
+    const response: { error: string; code?: string; details?: unknown } = {
       error: err.message,
     };
+    if (err.code) response.code = err.code;
 
     // Solo incluir detalles en errores de validación
     if (err instanceof ValidationError && err.details) {

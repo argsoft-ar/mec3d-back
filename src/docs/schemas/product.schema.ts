@@ -50,6 +50,13 @@ export const productSchemaDoc = {
       reviewCount: { type: "integer", example: 128 },
       downloads: { type: "integer", example: 500 },
       price: { type: "number", example: 2500 },
+      pesoGramos: {
+        type: "integer",
+        nullable: true,
+        description:
+          "Peso en gramos; null en diseños anteriores a que fuera obligatorio",
+        example: 120,
+      },
       format: { type: "string", example: "STL" },
       categoria: { type: "string", example: "Decoración" },
       tecnologia: {
@@ -72,7 +79,7 @@ export const productSchemaDoc = {
     type: "object",
     description:
       'Si `categoria` es "Planos técnicos": `formato` es obligatorio y debe ser PDF, DWG o DXF; `tecnologia`, `materiales` y `especificaciones` son opcionales (los materiales requieren tecnología). Para el resto de las categorías `tecnologia` y `materiales` son obligatorios.',
-    required: ["titulo", "archivoUrl", "precioBase"],
+    required: ["titulo", "archivoUrl", "precioBase", "pesoGramos"],
     properties: {
       titulo: { type: "string", minLength: 3, example: "Soporte para celular" },
       descripcion: { type: "string", example: "Soporte ergonómico ajustable" },
@@ -84,6 +91,13 @@ export const productSchemaDoc = {
         maximum: 10000000,
         multipleOf: 0.01,
         example: 2500,
+      },
+      pesoGramos: {
+        type: "integer",
+        minimum: 1,
+        maximum: 1000000,
+        description: "Peso en gramos (entero positivo)",
+        example: 120,
       },
       formato: {
         type: "string",
@@ -131,6 +145,7 @@ export const productSchemaDoc = {
         maximum: 10000000,
         multipleOf: 0.01,
       },
+      pesoGramos: { type: "integer", minimum: 1, maximum: 1000000 },
       formato: { type: "string" },
       categoria: { type: "string" },
       tecnologia: { type: "string", example: "Impresión 3D" },

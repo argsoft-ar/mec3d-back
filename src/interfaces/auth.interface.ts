@@ -13,8 +13,22 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   message: string;
-  token: string;
   user: UserResponse;
+}
+
+// Resultado interno de las operaciones que abren sesión: el token nunca va en el body,
+// el controller lo escribe en la cookie HttpOnly.
+export interface SessionResult<T> {
+  body: T;
+  sessionToken: string;
+}
+
+export interface MeResponse {
+  user: UserResponse;
+}
+
+export interface SocketTokenResponse {
+  token: string;
 }
 
 export interface RegisterRequest {
