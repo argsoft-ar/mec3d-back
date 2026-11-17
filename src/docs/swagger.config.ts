@@ -12,6 +12,7 @@ import {
   ordenFabricacionPaths,
   ordenFabricacionSchemaDoc,
 } from "./orden-fabricacion.docs";
+import { chatPaths, chatSchemaDoc } from "./chat.docs";
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -48,6 +49,7 @@ const options: swaggerJsdoc.Options = {
         ...paginationSchemaDoc,
         ...pagoSchemaDoc,
         ...ordenFabricacionSchemaDoc,
+        ...chatSchemaDoc,
       },
     },
     paths: {
@@ -57,6 +59,7 @@ const options: swaggerJsdoc.Options = {
       ...catalogoPaths,
       ...pagoPaths,
       ...ordenFabricacionPaths,
+      ...chatPaths,
     },
   },
   apis: [],

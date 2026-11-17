@@ -1,3 +1,5 @@
+import { INFILL_VALUES } from "../../schemas/diseno.schema";
+
 export const productSchemaDoc = {
   ProductSpecificaciones: {
     type: "object",
@@ -24,7 +26,7 @@ export const productSchemaDoc = {
           },
           infill: {
             type: "string",
-            enum: ["15%", "20%", "25%", "30%", "40%", "50%", "60%"],
+            enum: INFILL_VALUES,
           },
         },
       },

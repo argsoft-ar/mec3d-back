@@ -78,6 +78,27 @@ describe("notificaciones", () => {
     expect(mockTo).toHaveBeenCalledWith(`user:${FABRICANTE}`);
   });
 
+  it("omite a quien cerró la conversación (incluso en mensajes de sistema)", () => {
+    notificarMensaje(
+      fila({
+        remitente_id: null,
+        remitente_username: null,
+        tipo: "sistema",
+        cerrada_por_comprador_en: "2026-01-02T00:00:00.000Z",
+      }),
+    );
+    expect(mockTo).toHaveBeenCalledTimes(1);
+    expect(mockTo).toHaveBeenCalledWith(`user:${FABRICANTE}`);
+  });
+
+  it("si el destinatario cerró la conversación no se le notifica nada", () => {
+    notificarMensaje(
+      fila({ cerrada_por_fabricante_en: "2026-01-02T00:00:00.000Z" }),
+    );
+    expect(mockTo).not.toHaveBeenCalled();
+    expect(mockEmit).not.toHaveBeenCalled();
+  });
+
   it("el preview es texto plano truncado a ~100 caracteres", () => {
     notificarMensaje(
       fila({ contenido: `<b>hola</b> <script>x</script>${"a".repeat(300)}` }),
@@ -114,6 +135,64 @@ describe("chatRepository (no leídos)", () => {
     expect(res.fabricante_id).toBe(FABRICANTE);
   });
 
+  it("crearMensaje devuelve el estado de cierre para que el notificador omita a quien cerró", async () => {
+    mockQuery.mockResolvedValue({ rows: [fila()] });
+    await chatRepository.crearMensaje({
+      conversacionId: CONV,
+      remitenteId: null,
+      contenido: "x",
+      tipo: "sistema",
+    });
+    const [sql] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(
+      /c\.cerrada_por_comprador_en, c\.cerrada_por_fabricante_en/,
+    );
+  });
+
+  it("crearMensajeSiAbierta: una sola sentencia con guard de cierre/estado y FOR SHARE OF c", async () => {
+    mockQuery.mockResolvedValue({ rows: [fila()] });
+    const res = await chatRepository.crearMensajeSiAbierta({
+      conversacionId: CONV,
+      remitenteId: COMPRADOR,
+      contenido: "Hola",
+      tipo: "texto",
+    });
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(/\$2::uuid IN \(c\.comprador_id, c\.fabricante_id\)/);
+    expect(sql).toMatch(/c\.cerrada_por_comprador_en IS NULL/);
+    expect(sql).toMatch(/c\.cerrada_por_fabricante_en IS NULL/);
+    expect(sql).toMatch(/o\.estado NOT IN \('cancelado', 'rechazado'\)/);
+    expect(sql).toMatch(/FOR SHARE OF c\b/);
+    expect(sql).not.toMatch(/FOR (UPDATE|SHARE) OF o/);
+    // El INSERT se alimenta del SELECT guardado (no VALUES): sin fila no inserta.
+    expect(sql).toMatch(/INSERT INTO mensajes[^;]*SELECT conv\.id/);
+    expect(sql).not.toMatch(/VALUES \(\$1, \$2, \$3, \$4\)/);
+    expect(params).toEqual([CONV, COMPRADOR, "Hola", "texto"]);
+    expect(res?.id).toBe("msg-1");
+  });
+
+  it("crearMensajeSiAbierta: devuelve null si la conversación está cerrada (no se insertó)", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    await expect(
+      chatRepository.crearMensajeSiAbierta({
+        conversacionId: CONV,
+        remitenteId: COMPRADOR,
+        contenido: "Hola",
+        tipo: "texto",
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("lockById bloquea la conversación FOR UPDATE con el cliente de la transacción", async () => {
+    const db = { query: jest.fn().mockResolvedValue({ rows: [{ id: CONV }] }) };
+    await chatRepository.lockById(db, CONV);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toMatch(/FROM conversaciones[\s\S]*FOR UPDATE/);
+    expect(params).toEqual([CONV]);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
   it("contarNoLeidosTotal excluye mensajes propios y usa la última lectura", async () => {
     mockQuery.mockResolvedValue({ rows: [{ total: 4 }] });
     expect(await chatRepository.contarNoLeidosTotal(COMPRADOR)).toBe(4);
@@ -122,8 +201,37 @@ describe("chatRepository (no leídos)", () => {
     expect(sql).toMatch(
       /l\.ultima_lectura_en IS NULL OR m\.creado_en > l\.ultima_lectura_en/,
     );
-    expect(sql).toMatch(/c\.comprador_id = \$1 OR c\.fabricante_id = \$1/);
+    expect(sql).toMatch(
+      /c\.comprador_id = \$1 AND c\.cerrada_por_comprador_en IS NULL/,
+    );
+    expect(sql).toMatch(
+      /c\.fabricante_id = \$1 AND c\.cerrada_por_fabricante_en IS NULL/,
+    );
     expect(params).toEqual([COMPRADOR]);
+  });
+
+  it("getConversacionesByUsuario excluye las conversaciones que el usuario cerró", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    await chatRepository.getConversacionesByUsuario(COMPRADOR);
+    const [sql] = mockQuery.mock.calls[0];
+    expect(sql).toMatch(
+      /c\.comprador_id = \$1 AND c\.cerrada_por_comprador_en IS NULL/,
+    );
+    expect(sql).toMatch(
+      /c\.fabricante_id = \$1 AND c\.cerrada_por_fabricante_en IS NULL/,
+    );
+    expect(sql).toMatch(/c\.cerrada_por_comprador_en, c\.cerrada_por_fabricante_en/);
+  });
+
+  it("cerrarParaUsuario solo marca la columna del rol y es idempotente", async () => {
+    const db = { query: jest.fn().mockResolvedValue({ rows: [{ id: CONV }] }) };
+    await chatRepository.cerrarParaUsuario(db, CONV, "fabricante");
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toMatch(
+      /SET cerrada_por_fabricante_en = COALESCE\(cerrada_por_fabricante_en, now\(\)\)/,
+    );
+    expect(sql).not.toMatch(/cerrada_por_comprador_en =/);
+    expect(params).toEqual([CONV]);
   });
 
   it("getConversacionesByUsuario calcula no_leidos en la misma query", async () => {

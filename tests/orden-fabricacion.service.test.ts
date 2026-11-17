@@ -12,6 +12,7 @@ jest.mock("../src/repositories/orden-fabricacion.repository", () => ({
   ordenFabricacionRepository: {
     getById: jest.fn(),
     lockById: jest.fn(),
+    proponerPrecio: jest.fn(),
     aceptarPresupuesto: jest.fn(),
     cancelarHermanas: jest.fn(),
     guardarCodigoEntrega: jest.fn(),
@@ -38,6 +39,7 @@ jest.mock("../src/repositories/chat.repository", () => ({
   chatRepository: {
     getByOrdenFabricacionId: jest.fn(),
     crearMensaje: jest.fn(),
+    crearMensajeSiAbierta: jest.fn(),
     createConversacion: jest.fn(),
     marcarLeida: jest.fn(),
   },
@@ -260,6 +262,105 @@ describe("ordenFabricacionService.crear: notificaciones", () => {
     chat.getByOrdenFabricacionId.mockResolvedValue({ id: "conv-1" } as never);
     await ordenFabricacionService.crear(COMPRA_ID, [FABRICANTE], COMPRADOR);
     expect(chat.crearMensaje).not.toHaveBeenCalled();
+    expect(mockEmit).not.toHaveBeenCalled();
+  });
+});
+
+describe("ordenFabricacionService.proponerPrecio", () => {
+  const mensajePropuesta = {
+    id: "msg-p",
+    conversacion_id: "conv-1",
+    remitente_id: FABRICANTE,
+    contenido: "El fabricante propuso $1800",
+    tipo: "propuesta_precio",
+    creado_en: "2026-01-02",
+    comprador_id: COMPRADOR,
+    fabricante_id: FABRICANTE,
+    cerrada_por_comprador_en: null,
+    cerrada_por_fabricante_en: null,
+    remitente_username: "fab",
+  };
+
+  beforeEach(() => {
+    ordenes.proponerPrecio.mockResolvedValue(
+      filaOrden({ precio_propuesto_fabricante: "1800.00" }),
+    );
+    chat.crearMensajeSiAbierta.mockResolvedValue(mensajePropuesta as never);
+  });
+
+  it("crea el mensaje con la inserción guardada dentro de la transacción y emite post-commit", async () => {
+    const res = await ordenFabricacionService.proponerPrecio(
+      ORDEN_ID,
+      1800,
+      FABRICANTE,
+    );
+
+    expect(transaccion).toHaveBeenCalledTimes(1);
+    expect(chat.getByOrdenFabricacionId).toHaveBeenCalledWith(
+      ORDEN_ID,
+      mockClient,
+    );
+    expect(chat.crearMensajeSiAbierta).toHaveBeenCalledWith(
+      {
+        conversacionId: "conv-1",
+        remitenteId: FABRICANTE,
+        contenido: "El fabricante propuso $1800",
+        tipo: "propuesta_precio",
+      },
+      mockClient,
+    );
+    expect(chat.crearMensaje).not.toHaveBeenCalled();
+    // Jerarquía orden -> conversación: el lock de la orden va primero.
+    expect(ordenes.lockById.mock.invocationCallOrder[0]).toBeLessThan(
+      chat.crearMensajeSiAbierta.mock.invocationCallOrder[0],
+    );
+    expect(mockTo).toHaveBeenCalledWith("conv-1");
+    expect(mockEmit).toHaveBeenCalledWith(
+      "precio-propuesto",
+      expect.objectContaining({ ordenFabricacionId: ORDEN_ID, precio: 1800 }),
+    );
+    expect(
+      chat.crearMensajeSiAbierta.mock.invocationCallOrder[0],
+    ).toBeLessThan(mockEmit.mock.invocationCallOrder[0]);
+    expect(mockTo).toHaveBeenCalledWith(`user:${COMPRADOR}`);
+    expect(res.precioPropuestoFabricante).toBe(1800);
+  });
+
+  it("conversación cerrada: falla con CONVERSACION_CERRADA dentro de la transacción, sin mensaje ni eventos", async () => {
+    chat.crearMensajeSiAbierta.mockResolvedValue(null);
+
+    await expect(
+      ordenFabricacionService.proponerPrecio(ORDEN_ID, 1800, FABRICANTE),
+    ).rejects.toMatchObject({ statusCode: 409, code: "CONVERSACION_CERRADA" });
+
+    // El error se lanza desde el callback de withTransaction: revierte también la propuesta.
+    expect(transaccion).toHaveBeenCalledTimes(1);
+    await expect(transaccion.mock.results[0].value).rejects.toMatchObject({
+      code: "CONVERSACION_CERRADA",
+    });
+    expect(chat.crearMensaje).not.toHaveBeenCalled();
+    expect(mockTo).not.toHaveBeenCalled();
+    expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  it("no notifica a un participante que cerró la conversación", async () => {
+    chat.crearMensajeSiAbierta.mockResolvedValue({
+      ...mensajePropuesta,
+      remitente_id: COMPRADOR,
+      cerrada_por_fabricante_en: "2026-01-02",
+    } as never);
+    await ordenFabricacionService.proponerPrecio(ORDEN_ID, 1300, COMPRADOR);
+    expect(mockTo).not.toHaveBeenCalledWith(`user:${FABRICANTE}`);
+    expect(mockTo).not.toHaveBeenCalledWith(`user:${COMPRADOR}`);
+  });
+
+  it("orden en estado final: 409 sin tocar el chat", async () => {
+    ordenes.lockById.mockResolvedValue(filaOrden({ estado: "cancelado" }));
+    await expect(
+      ordenFabricacionService.proponerPrecio(ORDEN_ID, 1800, FABRICANTE),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(ordenes.proponerPrecio).not.toHaveBeenCalled();
+    expect(chat.crearMensajeSiAbierta).not.toHaveBeenCalled();
     expect(mockEmit).not.toHaveBeenCalled();
   });
 });

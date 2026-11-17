@@ -459,48 +459,78 @@ export const ordenFabricacionService = {
 
     const role = resolveRole(orden, userId);
 
-    const updated = await withTransaction(async (client) => {
-      const bloqueada = await ordenFabricacionRepository.lockById(
-        client,
-        ordenId,
-      );
-      if (!bloqueada || ESTADOS_FINALES.includes(bloqueada.estado)) {
-        throw new ConflictError(
-          "Esta orden ya no admite nuevas propuestas de precio",
+    // Orden y mensaje de propuesta en la misma transacción: el lock de la orden ya excluye un
+    // cierre de chat durante la negociación (que cancela/rechaza la orden), y la inserción
+    // guardada (FOR SHARE de la conversación, después del lock de la orden: misma jerarquía
+    // orden -> conversación) evita que la propuesta aterrice en un chat ya cerrado.
+    const { updated, conversacionId, mensajePropuesta } = await withTransaction(
+      async (client) => {
+        const bloqueada = await ordenFabricacionRepository.lockById(
+          client,
+          ordenId,
         );
-      }
-      const actualizada = await ordenFabricacionRepository.proponerPrecio(
-        ordenId,
-        role,
-        precio,
-        client,
-      );
-      if (!actualizada) {
-        throw new ConflictError(
-          "Esta orden ya no admite nuevas propuestas de precio",
+        if (!bloqueada || ESTADOS_FINALES.includes(bloqueada.estado)) {
+          throw new ConflictError(
+            "Esta orden ya no admite nuevas propuestas de precio",
+          );
+        }
+        const actualizada = await ordenFabricacionRepository.proponerPrecio(
+          ordenId,
+          role,
+          precio,
+          client,
         );
-      }
-      return actualizada;
-    });
+        if (!actualizada) {
+          throw new ConflictError(
+            "Esta orden ya no admite nuevas propuestas de precio",
+          );
+        }
 
-    // Bug conocido corregido: este endpoint es REST y antes no avisaba al otro
+        const conversacion = await chatRepository.getByOrdenFabricacionId(
+          ordenId,
+          client,
+        );
+        if (!conversacion) {
+          return {
+            updated: actualizada,
+            conversacionId: null,
+            mensajePropuesta: null,
+          };
+        }
+        // Cartel embebido en el hilo del chat (no solo un estado aparte) para que
+        // quede visible en el historial qué precio se propuso y quién lo hizo.
+        const mensaje = await chatRepository.crearMensajeSiAbierta(
+          {
+            conversacionId: conversacion.id,
+            remitenteId: userId,
+            contenido:
+              role === "fabricante"
+                ? `El fabricante propuso $${precio}`
+                : `El comprador propuso $${precio}`,
+            tipo: "propuesta_precio",
+          },
+          client,
+        );
+        if (!mensaje) {
+          // Revierte también la propuesta: no queda un precio nuevo sin su mensaje.
+          throw new ConflictError(
+            "La conversación fue cerrada: ya no admite propuestas de precio",
+            "CONVERSACION_CERRADA",
+          );
+        }
+        return {
+          updated: actualizada,
+          conversacionId: conversacion.id as string,
+          mensajePropuesta: mensaje,
+        };
+      },
+    );
+
+    // Post-commit. Bug conocido corregido: este endpoint es REST y antes no avisaba al otro
     // lado del chat, que solo veía la propuesta nueva al refrescar manualmente.
-    const conversacion = await chatRepository.getByOrdenFabricacionId(ordenId);
-    if (conversacion) {
-      // Cartel embebido en el hilo del chat (no solo un estado aparte) para que
-      // quede visible en el historial qué precio se propuso y quién lo hizo.
-      const mensajePropuesta = await chatRepository.crearMensaje({
-        conversacionId: conversacion.id,
-        remitenteId: userId,
-        contenido:
-          role === "fabricante"
-            ? `El fabricante propuso $${precio}`
-            : `El comprador propuso $${precio}`,
-        tipo: "propuesta_precio",
-      });
-
+    if (conversacionId && mensajePropuesta) {
       getIO()
-        ?.to(conversacion.id)
+        ?.to(conversacionId)
         .emit("precio-propuesto", {
           ordenFabricacionId: ordenId,
           role,
